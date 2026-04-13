@@ -31,11 +31,30 @@ ENDPOINTS = {
     "sub_visa_categories":  f"{LIFT_API_BASE}/master/subvisacategory/{{mission}}/{{country}}/{{center}}/{{visacategorycode}}",
 }
 
-# Headers matching the Android app (no browser Origin/Referer — mobile apps don't send those)
+# Headers matching what the VFS Italy Android app sends on every protected
+# request (discovered by reading the HashMap construction in
+# AddApplicantBookAppointmentActivity.java lines 710-727 / 832-850).
+#
+# Key points:
+#   - Auth header is "Authorize" (NOT "Authorization"), raw token, no "Bearer".
+#   - origin / referer are the web portal URL, even though the app calls the
+#     mobile API.
+#   - cfmlift has no default in remote_config_defaults.xml → empty string.
+#   - ClientSource is RSA-OAEP-SHA256 encrypted "mobile;<iso-timestamp>",
+#     base64, spaces stripped. Android Utility.e() catches encryption
+#     exceptions and returns "" — which strongly suggests the server
+#     tolerates empty. We try empty first and only implement encryption
+#     if the server actually validates it.
+APPOINTMENT_ORIGIN = "https://visa.vfsglobal.com/"
+
 DEFAULT_HEADERS = {
     "User-Agent": "okhttp/4.12.0",
     "Accept": "application/json",
     "Accept-Language": "en-US,en;q=0.9",
+    "origin": APPOINTMENT_ORIGIN,
+    "referer": APPOINTMENT_ORIGIN,
+    "cfmlift": "",
+    "ClientSource": "",
 }
 
 
@@ -122,7 +141,9 @@ class VFSClient:
             return False
 
         self.token_expires = time.time() + 25 * 60
-        self.session.headers["Authorization"] = f"Bearer {self.token}"
+        # NOTE: mobile API uses "Authorize" header (no "Bearer" prefix),
+        # not the standard "Authorization" header.
+        self.session.headers["Authorize"] = self.token
         logger.info("LIFT API login successful — token acquired.")
         return True
 
@@ -130,7 +151,7 @@ class VFSClient:
         """Set an externally-obtained token (from browser_login.py)."""
         self.token = token
         self.token_expires = time.time() + 25 * 60
-        self.session.headers["Authorization"] = f"Bearer {token}"
+        self.session.headers["Authorize"] = token
 
     def ensure_authenticated(self) -> bool:
         """Re-login if token has expired or is missing."""

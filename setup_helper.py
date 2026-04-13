@@ -29,9 +29,12 @@ LIFT_API_BASE = "https://lift-api.vfsglobal.com"
 TOKEN_FILE = os.path.join(os.path.dirname(__file__), ".vfs_token")
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36",
+    "User-Agent": "okhttp/4.12.0",
     "Accept": "application/json",
-    "Origin": "https://visa.vfsglobal.com",
+    "origin": "https://visa.vfsglobal.com/",
+    "referer": "https://visa.vfsglobal.com/",
+    "cfmlift": "",
+    "ClientSource": "",
 }
 
 
@@ -113,7 +116,7 @@ def get_token() -> str:
 
 
 def fetch_json(url: str, token: str) -> list | dict | None:
-    headers = {**HEADERS, "Authorization": f"Bearer {token}"}
+    headers = {**HEADERS, "Authorize": token}
     try:
         resp = requests.get(url, headers=headers, timeout=15)
         print(f"  [{resp.status_code}] {url}")
