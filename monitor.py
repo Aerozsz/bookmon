@@ -88,6 +88,7 @@ def main():
         mission_code=config.VFS_MISSION_CODE,
         vac_code=config.VFS_VAC_CODE,
         captcha_api_key=config.CAPTCHA_API_KEY,
+        rsa_public_key_pem=config.VFS_RSA_PUBLIC_KEY_PEM,
     )
 
     # Auth strategy: try direct LIFT API login first, fall back to saved token
@@ -156,7 +157,7 @@ def main():
                         logger.info("New token detected!")
                         client.token = new_token
                         client.token_expires = time.time() + 25 * 60
-                        client.session.headers["Authorization"] = f"Bearer {new_token}"
+                        client.session.headers["Authorize"] = new_token
                         token_expired_notified = False
                         consecutive_errors = 0
                         break  # restart the category loop with fresh token
