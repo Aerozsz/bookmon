@@ -104,14 +104,10 @@ def get_token() -> str:
     if token:
         return token
 
-    print("\n  No valid token available!")
-    print("  Run browser_login.py first to authenticate:")
-    print()
-    print("    pip install playwright")
-    print("    playwright install chromium")
-    print("    python browser_login.py")
-    print()
-    print("  Then re-run this script.")
+    print("\n  No valid token available.")
+    print("  Direct login to the LIFT API is currently failing — we're still")
+    print("  working out which auth headers / captcha fields the server requires.")
+    print("  See the notes in vfs_client.py for the latest diagnosis.")
     sys.exit(1)
 
 

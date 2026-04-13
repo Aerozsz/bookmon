@@ -140,7 +140,7 @@ class VFSClient:
             logger.error("Login response (no token found): %s", data)
             return False
 
-        self.token_expires = time.time() + 25 * 60
+        self.token_expires = time.time() + 20 * 60
         # NOTE: mobile API uses "Authorize" header (no "Bearer" prefix),
         # not the standard "Authorization" header.
         self.session.headers["Authorize"] = self.token
@@ -150,7 +150,7 @@ class VFSClient:
     def set_token(self, token: str):
         """Set an externally-obtained token (from browser_login.py)."""
         self.token = token
-        self.token_expires = time.time() + 25 * 60
+        self.token_expires = time.time() + 20 * 60
         self.session.headers["Authorize"] = token
 
     def ensure_authenticated(self) -> bool:
