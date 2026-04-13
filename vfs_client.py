@@ -5,11 +5,63 @@ Endpoints are from the VFS Italy Android app (lift-api.vfsglobal.com).
 Login uses form-encoded POST. Appointment checks use JSON POST.
 """
 
+import base64
+import datetime
 import logging
 import time
+
 import requests
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 
 logger = logging.getLogger(__name__)
+
+
+# ── RSA-OAEP-SHA256/MGF1 encryption ───────────────────────────────────
+#
+# The VFS Italy Android app encrypts the login password AND a fresh
+# "mobile;<iso-timestamp>" ClientSource header value before every
+# protected call. The cipher is:
+#
+#   Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding")
+#   + OAEPParameterSpec(SHA-256, "MGF1", MGF1ParameterSpec.SHA256,
+#                       PSpecified.DEFAULT)
+#
+# Output is Base64-encoded with all whitespace stripped. See:
+#   apk-analysis/com/vfs/italyglobal/utilities/k.java  (the cipher)
+#   apk-analysis/com/vfs/italyglobal/utilities/Utility.java::e  (wrapper)
+#   apk-analysis/com/vfs/italyglobal/activities/AppointmentLogin.java:329
+
+def rsa_encrypt(public_key_pem: str, plaintext: str) -> str:
+    """Encrypt a string with RSA-OAEP-SHA256/MGF1 and Base64-encode."""
+    if not public_key_pem:
+        raise ValueError(
+            "VFS_RSA_PUBLIC_KEY_PEM is empty — cannot encrypt payload. "
+            "Set it in your .env to the VFS public key (see README)."
+        )
+    key = serialization.load_pem_public_key(public_key_pem.encode("utf-8"))
+    ciphertext = key.encrypt(
+        plaintext.encode("utf-8"),
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
+    )
+    # Android strips whitespace from the Base64 output before sending.
+    return base64.b64encode(ciphertext).decode("ascii").replace(" ", "").replace("\n", "")
+
+
+def build_client_source(public_key_pem: str) -> str:
+    """
+    Build the ClientSource header value.
+
+    Plaintext format (from Utility.l()): "mobile;<ISO-8601 UTC timestamp>"
+    The timestamp is regenerated on every request, so this must be called
+    fresh before each protected API call.
+    """
+    ts = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    return rsa_encrypt(public_key_pem, f"mobile;{ts}")
 
 # ── API Base URLs (from remote_config_defaults.xml → app_config_prod) ──
 LIFT_API_BASE = "https://lift-api.vfsglobal.com"
@@ -41,10 +93,10 @@ ENDPOINTS = {
 #     mobile API.
 #   - cfmlift has no default in remote_config_defaults.xml → empty string.
 #   - ClientSource is RSA-OAEP-SHA256 encrypted "mobile;<iso-timestamp>",
-#     base64, spaces stripped. Android Utility.e() catches encryption
-#     exceptions and returns "" — which strongly suggests the server
-#     tolerates empty. We try empty first and only implement encryption
-#     if the server actually validates it.
+#     base64, spaces stripped. It is refreshed before every authenticated
+#     request (see _refresh_client_source). Android's Utility.e() catches
+#     encryption exceptions and returns "", so if the public key is not
+#     configured we fall back to an empty header.
 APPOINTMENT_ORIGIN = "https://visa.vfsglobal.com/"
 
 DEFAULT_HEADERS = {
@@ -68,18 +120,45 @@ class VFSClient:
 
     def __init__(self, email: str, password: str, country_code: str,
                  mission_code: str, vac_code: str,
-                 captcha_api_key: str = ""):
+                 captcha_api_key: str = "",
+                 rsa_public_key_pem: str = ""):
         self.email = email
         self.password = password
         self.country_code = country_code.lower()
         self.mission_code = mission_code.lower()
         self.vac_code = vac_code
         self.captcha_api_key = captcha_api_key
+        self.rsa_public_key_pem = rsa_public_key_pem
 
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
         self.token: str | None = None
         self.token_expires: float = 0
+
+    # ── Crypto helpers ───────────────────────────────────────────────
+
+    def _encrypt(self, plaintext: str) -> str:
+        """RSA-encrypt a value with the configured public key."""
+        return rsa_encrypt(self.rsa_public_key_pem, plaintext)
+
+    def _refresh_client_source(self) -> None:
+        """
+        Recompute the ClientSource header with a fresh timestamp.
+
+        Every protected API call rebuilds this — see
+        AppointmentGetEarliestDates.java:970 where ClientSource is set
+        right before each HashMap is passed to Retrofit.
+        """
+        try:
+            self.session.headers["ClientSource"] = build_client_source(
+                self.rsa_public_key_pem
+            )
+        except ValueError as exc:
+            # No key configured — leave the header empty and hope the
+            # server tolerates it (Utility.e() catches exceptions and
+            # returns "" on the Android side).
+            logger.warning("ClientSource not encrypted: %s", exc)
+            self.session.headers["ClientSource"] = ""
 
     # ── Authentication ───────────────────────────────────────────────
 
@@ -89,10 +168,30 @@ class VFSClient:
 
         The APK uses @FormUrlEncoded POST to user/login with fields:
         username, password, missioncode, countrycode
+
+        `password` is RSA-OAEP-SHA256 encrypted with the VFS public key
+        and then Base64-encoded (see AppointmentLogin.java::F1 line 329).
+        The `ClientSource` header is a fresh encrypted
+        "mobile;<iso-timestamp>" — regenerated on every request.
         """
+        if not self.rsa_public_key_pem:
+            logger.error(
+                "Cannot log in: VFS_RSA_PUBLIC_KEY_PEM is not set. "
+                "The LIFT API requires the password to be RSA-encrypted."
+            )
+            return False
+
+        try:
+            encrypted_password = self._encrypt(self.password)
+        except Exception as exc:
+            logger.error("Failed to RSA-encrypt password: %s", exc)
+            return False
+
+        self._refresh_client_source()
+
         form_data = {
             "username": self.email,
-            "password": self.password,
+            "password": encrypted_password,
             "missioncode": self.mission_code,
             "countrycode": self.country_code,
         }
@@ -248,6 +347,7 @@ class VFSClient:
 
     def _get_json(self, url: str) -> list:
         """GET request that returns JSON list."""
+        self._refresh_client_source()
         try:
             resp = self.session.get(url, timeout=30)
             logger.debug("GET %s — HTTP %d", url, resp.status_code)
@@ -263,6 +363,11 @@ class VFSClient:
         """Make a JSON POST to an appointment endpoint with auth retry."""
         logger.debug("POST %s — %s", url, payload)
 
+        # Every protected call needs a fresh encrypted ClientSource
+        # because the plaintext contains an ISO timestamp the server
+        # may reject if stale.
+        self._refresh_client_source()
+
         try:
             resp = self.session.post(url, json=payload, timeout=30)
         except requests.RequestException as exc:
@@ -275,6 +380,7 @@ class VFSClient:
             self.token = None
             if not self.login():
                 return {"available": False, "slots": [], "raw": {}, "error": "Re-auth failed"}
+            self._refresh_client_source()
             try:
                 resp = self.session.post(url, json=payload, timeout=30)
             except requests.RequestException as exc:

@@ -53,26 +53,38 @@ def load_token() -> str | None:
 
 
 def try_direct_login() -> str | None:
-    """Attempt direct API login (may fail with reCAPTCHA for Algeria)."""
+    """Attempt direct API login against the LIFT API."""
+    from vfs_client import rsa_encrypt, build_client_source
+
     email = os.getenv("VFS_EMAIL", "")
     password = os.getenv("VFS_PASSWORD", "")
     country = os.getenv("VFS_COUNTRY_CODE", "dza")
     mission = os.getenv("VFS_MISSION_CODE", "ita")
+    pem = os.getenv("VFS_RSA_PUBLIC_KEY_PEM", "").replace("\\n", "\n")
 
     if not email or not password:
+        return None
+    if not pem:
+        print("  Skipping direct login: VFS_RSA_PUBLIC_KEY_PEM is not set.")
         return None
 
     print("  Attempting direct login...")
     try:
+        encrypted_password = rsa_encrypt(pem, password)
+        client_source = build_client_source(pem)
         resp = requests.post(
             f"{LIFT_API_BASE}/user/login",
             data={
                 "username": email,
-                "password": password,
+                "password": encrypted_password,
                 "missioncode": mission,
                 "countrycode": country,
             },
-            headers={**HEADERS, "Content-Type": "application/x-www-form-urlencoded"},
+            headers={
+                **HEADERS,
+                "ClientSource": client_source,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
             timeout=15,
         )
         if resp.status_code == 200:

@@ -88,6 +88,7 @@ def main():
         mission_code=config.VFS_MISSION_CODE,
         vac_code=config.VFS_VAC_CODE,
         captcha_api_key=config.CAPTCHA_API_KEY,
+        rsa_public_key_pem=config.VFS_RSA_PUBLIC_KEY_PEM,
     )
 
     # Auth strategy: try direct LIFT API login first, fall back to saved token

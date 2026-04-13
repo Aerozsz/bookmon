@@ -39,3 +39,8 @@ TELEGRAM_CHAT_ID = _optional("TELEGRAM_CHAT_ID")
 
 # Optional: 2captcha API key for reCAPTCHA
 CAPTCHA_API_KEY = _optional("CAPTCHA_API_KEY")
+
+# RSA public key (PEM) used to encrypt password + ClientSource before sending
+# to the LIFT API. Required for direct login — see vfs_client.py for details.
+# Multiline PEM in .env should be written as a single quoted string with \n.
+VFS_RSA_PUBLIC_KEY_PEM = _optional("VFS_RSA_PUBLIC_KEY_PEM").replace("\\n", "\n")
