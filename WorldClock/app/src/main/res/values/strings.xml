@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">World Clock</string>
+    <string name="add_city">Add City</string>
+    <string name="search_cities">Search cities…</string>
+    <string name="widget_label">World Clock</string>
+    <string name="no_cities">No clocks added yet.\nTap + to add a city.</string>
+    <string name="city_removed">%s removed</string>
+    <string name="undo">Undo</string>
+    <string name="same_as_you">Same as you</string>
+    <string name="from_you">from you</string>
+    <string name="widget_empty">No cities added</string>
+</resources>

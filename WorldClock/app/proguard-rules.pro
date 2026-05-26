@@ -1,0 +1,2 @@
+-keep class com.worldclock.app.widget.** { *; }
+-keep class com.worldclock.app.data.City { *; }
