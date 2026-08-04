@@ -1,0 +1,15 @@
+# .NET build output
+bin/
+obj/
+publish/
+installer_out/
+*.user
+
+# Bundling scratch (produced by CI)
+openvpn/
+wintun_extract/
+wintun.zip
+*.zip
+
+# IDE
+.vs/

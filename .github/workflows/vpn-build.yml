@@ -1,0 +1,136 @@
+name: Build Free VPN (Windows)
+
+on:
+  push:
+    branches: [ "claude/windows-vpn-app-pmutmo", "main" ]
+    paths:
+      - "windows-vpn/**"
+      - ".github/workflows/vpn-build.yml"
+    tags: [ "v*" ]
+  workflow_dispatch:
+    inputs:
+      make_release:
+        description: "Publish a GitHub Release with the built app"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  WINTUN_VERSION: "0.14.1"
+  APP_VERSION: "1.0.0"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows-vpn
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Regenerate app icon
+        run: python tools/make_icon.py
+
+      - name: Restore & publish (self-contained)
+        run: >
+          dotnet publish src/FreeVpn/FreeVpn.csproj
+          -c Release -r win-x64 --self-contained true
+          /p:PublishSingleFile=false
+          /p:Version=${{ env.APP_VERSION }}
+          -o publish
+
+      - name: Bundle OpenVPN binaries
+        shell: pwsh
+        run: |
+          Write-Host "Installing OpenVPN to obtain portable binaries..."
+          choco install openvpn -y --no-progress --ignore-checksums
+          $bin = "C:\Program Files\OpenVPN\bin"
+          if (-not (Test-Path $bin)) { throw "OpenVPN bin dir not found at $bin" }
+          $dest = "publish\openvpn"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          # Copy openvpn.exe and every runtime DLL it depends on.
+          Copy-Item "$bin\*" -Destination $dest -Recurse -Force
+          Write-Host "Bundled OpenVPN files:"
+          Get-ChildItem $dest | Select-Object Name | Format-Table -AutoSize
+
+      - name: Bundle Wintun driver
+        shell: pwsh
+        run: |
+          $ver = "${{ env.WINTUN_VERSION }}"
+          $url = "https://www.wintun.net/builds/wintun-$ver.zip"
+          Write-Host "Downloading Wintun from $url"
+          Invoke-WebRequest -Uri $url -OutFile wintun.zip
+          Expand-Archive -Path wintun.zip -DestinationPath wintun_extract -Force
+          $dll = Get-ChildItem -Path wintun_extract -Recurse -Filter wintun.dll |
+                 Where-Object { $_.FullName -match "amd64" } | Select-Object -First 1
+          if (-not $dll) { throw "wintun.dll (amd64) not found in archive" }
+          Copy-Item $dll.FullName -Destination "publish\openvpn\wintun.dll" -Force
+          Write-Host "Wintun bundled: $($dll.FullName)"
+
+      - name: Sanity check bundle
+        shell: pwsh
+        run: |
+          $need = @("publish\FreeVpn.exe","publish\openvpn\openvpn.exe","publish\openvpn\wintun.dll")
+          foreach ($f in $need) {
+            if (-not (Test-Path $f)) { throw "Missing expected file: $f" }
+            Write-Host "OK  $f"
+          }
+
+      - name: Create portable ZIP
+        shell: pwsh
+        run: |
+          $zip = "FreeVpn-Portable-${{ env.APP_VERSION }}.zip"
+          Compress-Archive -Path "publish\*" -DestinationPath $zip -Force
+          Write-Host "Created $zip"
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found" }
+          & $iscc "/DSourceDir=publish" "/DAppVersion=${{ env.APP_VERSION }}" "/Oinstaller_out" "installer\FreeVpn.iss"
+          Get-ChildItem installer_out
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: FreeVpn-windows
+          path: |
+            windows-vpn/FreeVpn-Portable-*.zip
+            windows-vpn/installer_out/*.exe
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.make_release)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}-build{1}', env.APP_VERSION, github.run_number) }}
+          name: Free VPN ${{ env.APP_VERSION }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+          generate_release_notes: false
+          body: |
+            ## Free VPN ${{ env.APP_VERSION }}
+
+            A free, no-signup VPN for Windows, powered by the **VPN Gate**
+            public relay network (University of Tsukuba). OpenVPN and the
+            Wintun driver are bundled — nothing else to install.
+
+            ### Downloads
+            - **FreeVpn-Setup-${{ env.APP_VERSION }}.exe** — installer (recommended)
+            - **FreeVpn-Portable-${{ env.APP_VERSION }}.zip** — portable; unzip and run `FreeVpn.exe`
+
+            Run as administrator (the app requests this automatically) so it can
+            create the VPN network adapter.
+          files: |
+            windows-vpn/FreeVpn-Portable-*.zip
+            windows-vpn/installer_out/*.exe
