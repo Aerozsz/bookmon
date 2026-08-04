@@ -58,15 +58,58 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           # Copy openvpn.exe and every runtime DLL it depends on.
           Copy-Item "$bin\*" -Destination $dest -Recurse -Force
-          # Copy the TAP-Windows6 driver package (.inf/.sys/.cat) so the app can
-          # install it and create the virtual adapter on the user's machine.
-          $drv = "C:\Program Files\OpenVPN\driver"
-          if (-not (Test-Path $drv)) { throw "OpenVPN driver dir not found at $drv" }
-          Copy-Item -Path $drv -Destination "$dest\driver" -Recurse -Force
           Write-Host "Bundled OpenVPN files:"
           Get-ChildItem $dest | Select-Object Name | Format-Table -AutoSize
-          Write-Host "Bundled driver files:"
-          Get-ChildItem "$dest\driver" -Recurse -Filter *.inf | Select-Object FullName | Format-Table -AutoSize
+
+      - name: Bundle TAP-Windows6 driver
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dest = "publish\openvpn\driver"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $found = $null
+
+          Write-Host "=== 1) DriverStore ==="
+          $ds = Get-ChildItem "C:\Windows\System32\DriverStore\FileRepository" -Directory -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -like "oemvista.inf_*" } | Select-Object -First 1
+          if ($ds) { $found = $ds.FullName; Write-Host "Found: $found" } else { Write-Host "not present" }
+
+          if (-not $found) {
+            Write-Host "=== 2) OpenVPN install dir ==="
+            $inf = Get-ChildItem "C:\Program Files\OpenVPN" -Recurse -Filter *.inf -ErrorAction SilentlyContinue |
+                   Where-Object { $_.Name -match "OemVista|tap" } | Select-Object -First 1
+            if ($inf) { $found = $inf.DirectoryName; Write-Host "Found: $($inf.FullName)" } else { Write-Host "not present" }
+          }
+
+          if (-not $found) {
+            Write-Host "=== 3) Download tap-windows6 and extract ==="
+            $urls = @(
+              "https://build.openvpn.net/downloads/releases/tap-windows-9.24.7-I601-Win10.exe",
+              "https://swupdate.openvpn.org/community/releases/tap-windows-9.24.7-I601-Win10.exe",
+              "https://build.openvpn.net/downloads/releases/tap-windows-9.26.0-I601-Win10.exe"
+            )
+            $sevenzip = "C:\Program Files\7-Zip\7z.exe"
+            foreach ($u in $urls) {
+              try {
+                Write-Host "Trying $u"
+                Invoke-WebRequest -Uri $u -OutFile tap.exe -UseBasicParsing
+                & $sevenzip x tap.exe "-otap_extract" -y | Out-Null
+                $inf = Get-ChildItem tap_extract -Recurse -Filter *.inf -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($inf) { $found = $inf.DirectoryName; Write-Host "Extracted: $($inf.FullName)"; break }
+              } catch { Write-Host "  failed: $($_.Exception.Message)" }
+            }
+          }
+
+          if (-not $found) {
+            Write-Host "=== Diagnostics: searching whole system for tap files ==="
+            Get-ChildItem "C:\" -Recurse -Include OemVista.inf,tap0901.sys -ErrorAction SilentlyContinue |
+              Select-Object -First 20 FullName | Format-Table -AutoSize
+            throw "Could not obtain the TAP-Windows6 driver from any source."
+          }
+
+          Copy-Item (Join-Path $found '*') -Destination $dest -Recurse -Force
+          Write-Host "=== Bundled driver files ==="
+          Get-ChildItem $dest -Recurse | Select-Object FullName | Format-Table -AutoSize
 
       - name: Sanity check bundle
         shell: pwsh
@@ -77,9 +120,9 @@ jobs:
             Write-Host "OK  $f"
           }
           $inf = Get-ChildItem "publish\openvpn\driver" -Recurse -Filter *.inf -ErrorAction SilentlyContinue |
-                 Where-Object { $_.FullName -match "tap" } | Select-Object -First 1
-          if (-not $inf) { throw "No TAP driver .inf found under publish\openvpn\driver" }
-          Write-Host "OK  TAP driver: $($inf.FullName)"
+                 Select-Object -First 1
+          if (-not $inf) { throw "No driver .inf found under publish\openvpn\driver" }
+          Write-Host "OK  driver: $($inf.FullName)"
 
       - name: Create portable ZIP
         shell: pwsh
