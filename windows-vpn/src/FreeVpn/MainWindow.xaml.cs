@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using FreeVpn.Services;
 
@@ -9,6 +10,7 @@ public partial class MainWindow : Window
     private readonly VpnGateClient _client = new();
     private readonly OpenVpnRunner _vpn = new();
     private ServerInfo? _connectedServer;
+    private List<ServerInfo> _allServers = new();
 
     public MainWindow()
     {
@@ -33,12 +35,9 @@ public partial class MainWindow : Window
 
         try
         {
-            var servers = await _client.GetServersAsync();
-            ServerList.ItemsSource = servers;
-            CountText.Text = $"{servers.Count} free servers available";
+            _allServers = await _client.GetServersAsync();
             LoadingPanel.Visibility = Visibility.Collapsed;
-            if (servers.Count > 0)
-                ServerList.SelectedIndex = 0;
+            ApplyFilter();
         }
         catch (Exception ex)
         {
@@ -51,6 +50,46 @@ public partial class MainWindow : Window
             UpdateConnectButton();
         }
     }
+
+    /// <summary>Applies the country filter and chosen sort to the loaded servers.</summary>
+    private void ApplyFilter()
+    {
+        if (_allServers.Count == 0) return;
+
+        var q = (FilterBox?.Text ?? "").Trim();
+        IEnumerable<ServerInfo> view = _allServers;
+
+        if (q.Length > 0)
+        {
+            view = view.Where(s =>
+                s.CountryLong.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                s.CountryShort.Contains(q, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Default order is already fastest-first (UDP then speed) from the client.
+        // "Sort by ping" re-orders to lowest latency first — best for nearby servers.
+        if (SortByPing?.IsChecked == true)
+            view = view.Where(s => s.Ping > 0).OrderBy(s => s.Ping)
+                       .Concat(view.Where(s => s.Ping <= 0));
+
+        var list = view.ToList();
+        ServerList.ItemsSource = list;
+        CountText.Text = q.Length > 0
+            ? $"{list.Count} of {_allServers.Count} servers"
+            : $"{list.Count} free servers available";
+        if (list.Count > 0)
+            ServerList.SelectedIndex = 0;
+    }
+
+    private void OnFilterChanged(object sender, TextChangedEventArgs e)
+    {
+        if (FilterHint != null)
+            FilterHint.Visibility = string.IsNullOrEmpty(FilterBox.Text)
+                ? Visibility.Visible : Visibility.Collapsed;
+        ApplyFilter();
+    }
+
+    private void OnSortChanged(object sender, RoutedEventArgs e) => ApplyFilter();
 
     private async void OnRefresh(object sender, RoutedEventArgs e)
     {
