@@ -9,7 +9,7 @@
     <RootNamespace>FreeVpn</RootNamespace>
     <AssemblyName>FreeVpn</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <AssemblyTitle>Free VPN</AssemblyTitle>
     <Product>Free VPN</Product>
     <Company>Free VPN (VPN Gate client)</Company>

@@ -19,7 +19,7 @@ permissions:
 
 env:
   DOTNET_VERSION: "8.0.x"
-  APP_VERSION: "1.0.2"
+  APP_VERSION: "1.0.3"
 
 jobs:
   build:
@@ -235,7 +235,7 @@ jobs:
 
             A free, no-signup VPN for Windows, powered by the **VPN Gate**
             public relay network (University of Tsukuba). OpenVPN and the
-            Wintun driver are bundled — nothing else to install.
+            TAP-Windows6 driver are bundled — nothing else to install.
 
             ### Downloads
             - **FreeVpn-Setup-${{ env.APP_VERSION }}.exe** — installer (recommended)
@@ -243,6 +243,12 @@ jobs:
 
             Run as administrator (the app requests this automatically) so it can
             create the VPN network adapter.
+
+            ### Tips for speed
+            Servers are volunteer-run, so throughput varies a lot. The list is
+            sorted fastest-first and shows each server's **Protocol** — prefer
+            **UDP** servers with a low ping and high advertised speed for the
+            best results.
           files: |
             windows-vpn/FreeVpn-Portable-*.zip
             windows-vpn/installer_out/*.exe

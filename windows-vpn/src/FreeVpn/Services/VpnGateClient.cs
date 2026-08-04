@@ -41,7 +41,12 @@ public sealed class VpnGateClient
                 var csv = await _http.GetStringAsync(url, ct);
                 var servers = Parse(csv);
                 if (servers.Count > 0)
-                    return servers.OrderByDescending(s => s.Score).ToList();
+                    // Fastest first: UDP servers ahead of TCP (much better throughput),
+                    // then by the server's advertised speed.
+                    return servers
+                        .OrderByDescending(s => s.IsUdp)
+                        .ThenByDescending(s => s.SpeedBps)
+                        .ToList();
             }
             catch (Exception ex)
             {
@@ -93,6 +98,7 @@ public sealed class VpnGateClient
                 CountryLong = f[5].Trim(),
                 CountryShort = f[6].Trim(),
                 Sessions = (int)ParseLong(f[7]),
+                Protocol = config.Contains("proto tcp", StringComparison.OrdinalIgnoreCase) ? "TCP" : "UDP",
                 OpenVpnConfig = config,
             });
         }

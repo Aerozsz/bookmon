@@ -67,11 +67,13 @@
                                             DisplayMemberBinding="{Binding Display}"/>
                             <GridViewColumn Header="Ping" Width="110"
                                             DisplayMemberBinding="{Binding PingText}"/>
-                            <GridViewColumn Header="Speed" Width="140"
+                            <GridViewColumn Header="Speed" Width="130"
                                             DisplayMemberBinding="{Binding SpeedMbps}"/>
-                            <GridViewColumn Header="Sessions" Width="110"
+                            <GridViewColumn Header="Protocol" Width="90"
+                                            DisplayMemberBinding="{Binding Protocol}"/>
+                            <GridViewColumn Header="Sessions" Width="90"
                                             DisplayMemberBinding="{Binding Sessions}"/>
-                            <GridViewColumn Header="Host" Width="140"
+                            <GridViewColumn Header="Host" Width="130"
                                             DisplayMemberBinding="{Binding HostName}"/>
                         </GridView>
                     </ListView.View>

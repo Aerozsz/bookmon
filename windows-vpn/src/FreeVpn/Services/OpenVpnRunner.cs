@@ -289,6 +289,12 @@ public sealed class OpenVpnRunner : IDisposable
             sb.AppendLine("data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305:AES-256-CBC:AES-128-CBC");
             sb.AppendLine("data-ciphers-fallback AES-128-CBC");
         }
+        // Larger socket buffers noticeably improve throughput on higher-latency
+        // links (many VPN Gate relays are far away).
+        if (!config.Contains("sndbuf"))
+            sb.AppendLine("sndbuf 524288");
+        if (!config.Contains("rcvbuf"))
+            sb.AppendLine("rcvbuf 524288");
         return sb.ToString();
     }
 

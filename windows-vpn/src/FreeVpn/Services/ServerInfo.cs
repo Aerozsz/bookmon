@@ -16,8 +16,14 @@ public sealed class ServerInfo
     public string CountryShort { get; init; } = "";
     public int Sessions { get; init; }
 
+    /// <summary>"UDP" or "TCP" — UDP is materially faster for this kind of tunnel.</summary>
+    public string Protocol { get; init; } = "UDP";
+
     /// <summary>Raw text of a ready-to-use OpenVPN config file.</summary>
     public string OpenVpnConfig { get; init; } = "";
+
+    /// <summary>True for UDP servers, which we surface first for throughput.</summary>
+    public bool IsUdp => Protocol.Equals("UDP", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Download speed formatted as Mbps, e.g. "42.3 Mbps".</summary>
     public string SpeedMbps => $"{SpeedBps / 1_000_000.0:0.0} Mbps";
