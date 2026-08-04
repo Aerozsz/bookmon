@@ -98,7 +98,9 @@ jobs:
           choco install innosetup -y --no-progress
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { throw "ISCC.exe not found" }
-          & $iscc "/DSourceDir=publish" "/DAppVersion=${{ env.APP_VERSION }}" "/Oinstaller_out" "installer\FreeVpn.iss"
+          # Inno resolves relative paths against the .iss location, so pass an absolute path.
+          $src = (Resolve-Path "publish").Path
+          & $iscc "/DSourceDir=$src" "/DAppVersion=${{ env.APP_VERSION }}" "/Oinstaller_out" "installer\FreeVpn.iss"
           Get-ChildItem installer_out
 
       - name: Upload build artifacts
