@@ -19,8 +19,7 @@ permissions:
 
 env:
   DOTNET_VERSION: "8.0.x"
-  WINTUN_VERSION: "0.14.1"
-  APP_VERSION: "1.0.1"
+  APP_VERSION: "1.0.2"
 
 jobs:
   build:
@@ -59,31 +58,28 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           # Copy openvpn.exe and every runtime DLL it depends on.
           Copy-Item "$bin\*" -Destination $dest -Recurse -Force
+          # Copy the TAP-Windows6 driver package (.inf/.sys/.cat) so the app can
+          # install it and create the virtual adapter on the user's machine.
+          $drv = "C:\Program Files\OpenVPN\driver"
+          if (-not (Test-Path $drv)) { throw "OpenVPN driver dir not found at $drv" }
+          Copy-Item -Path $drv -Destination "$dest\driver" -Recurse -Force
           Write-Host "Bundled OpenVPN files:"
           Get-ChildItem $dest | Select-Object Name | Format-Table -AutoSize
-
-      - name: Bundle Wintun driver
-        shell: pwsh
-        run: |
-          $ver = "${{ env.WINTUN_VERSION }}"
-          $url = "https://www.wintun.net/builds/wintun-$ver.zip"
-          Write-Host "Downloading Wintun from $url"
-          Invoke-WebRequest -Uri $url -OutFile wintun.zip
-          Expand-Archive -Path wintun.zip -DestinationPath wintun_extract -Force
-          $dll = Get-ChildItem -Path wintun_extract -Recurse -Filter wintun.dll |
-                 Where-Object { $_.FullName -match "amd64" } | Select-Object -First 1
-          if (-not $dll) { throw "wintun.dll (amd64) not found in archive" }
-          Copy-Item $dll.FullName -Destination "publish\openvpn\wintun.dll" -Force
-          Write-Host "Wintun bundled: $($dll.FullName)"
+          Write-Host "Bundled driver files:"
+          Get-ChildItem "$dest\driver" -Recurse -Filter *.inf | Select-Object FullName | Format-Table -AutoSize
 
       - name: Sanity check bundle
         shell: pwsh
         run: |
-          $need = @("publish\FreeVpn.exe","publish\openvpn\openvpn.exe","publish\openvpn\tapctl.exe","publish\openvpn\wintun.dll")
+          $need = @("publish\FreeVpn.exe","publish\openvpn\openvpn.exe","publish\openvpn\tapctl.exe")
           foreach ($f in $need) {
             if (-not (Test-Path $f)) { throw "Missing expected file: $f" }
             Write-Host "OK  $f"
           }
+          $inf = Get-ChildItem "publish\openvpn\driver" -Recurse -Filter *.inf -ErrorAction SilentlyContinue |
+                 Where-Object { $_.FullName -match "tap" } | Select-Object -First 1
+          if (-not $inf) { throw "No TAP driver .inf found under publish\openvpn\driver" }
+          Write-Host "OK  TAP driver: $($inf.FullName)"
 
       - name: Create portable ZIP
         shell: pwsh

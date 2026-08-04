@@ -88,9 +88,9 @@ public sealed class OpenVpnRunner : IDisposable
         };
         psi.ArgumentList.Add("--config");
         psi.ArgumentList.Add(_configPath);
-        // Use the bundled Wintun driver and the specific adapter we created.
+        // Use the TAP-Windows6 adapter we created above, by name.
         psi.ArgumentList.Add("--windows-driver");
-        psi.ArgumentList.Add("wintun");
+        psi.ArgumentList.Add("tap-windows6");
         psi.ArgumentList.Add("--dev-node");
         psi.ArgumentList.Add(AdapterName);
         psi.ArgumentList.Add("--verb");
@@ -165,9 +165,13 @@ public sealed class OpenVpnRunner : IDisposable
             SetState(VpnState.Disconnected);
     }
 
+    /// <summary>Folder holding the bundled TAP-Windows6 driver package.</summary>
+    private static string DriverDir => Path.Combine(OpenVpnDir, "driver");
+
     /// <summary>
-    /// Makes sure a Wintun adapter named <see cref="AdapterName"/> exists,
-    /// creating it with tapctl.exe if needed. Returns false (and logs) on failure.
+    /// Makes sure a TAP-Windows6 adapter named <see cref="AdapterName"/> exists,
+    /// installing the bundled driver and creating the adapter if needed.
+    /// Returns false (and logs) on failure.
     /// </summary>
     private async Task<bool> EnsureAdapterAsync(CancellationToken ct)
     {
@@ -177,7 +181,7 @@ public sealed class OpenVpnRunner : IDisposable
             return false;
         }
 
-        // Is our adapter already present from a previous run?
+        // Reuse the adapter if a previous run already created it.
         var (listCode, listOut) = await RunCaptureAsync(TapCtlExe, new[] { "list" }, ct);
         if (listCode == 0 && listOut.Contains(AdapterName, StringComparison.OrdinalIgnoreCase))
         {
@@ -185,21 +189,49 @@ public sealed class OpenVpnRunner : IDisposable
             return true;
         }
 
-        Log($"Creating network adapter \"{AdapterName}\" (first run may take a few seconds)...");
+        // First run: stage the TAP driver into Windows' driver store with pnputil
+        // so the adapter can actually be created. Wintun has no standalone driver
+        // package, so we use the classic TAP-Windows6 driver, which does.
+        var inf = FindTapInf();
+        if (inf is null)
+        {
+            Log("ERROR: bundled TAP driver (.inf) not found; cannot set up the network adapter.");
+            return false;
+        }
+
+        Log("Installing the network driver (first run only, may take a few seconds)...");
+        var (pnpCode, pnpOut) = await RunCaptureAsync(
+            "pnputil.exe", new[] { "/add-driver", inf, "/install" }, ct);
+        // pnputil returns non-zero in some already-installed cases; that's fine —
+        // only a failed tapctl create below is fatal.
+        if (pnpCode != 0)
+            Log($"(driver install returned {pnpCode}; continuing)");
+
+        Log($"Creating network adapter \"{AdapterName}\"...");
         var (createCode, createOut) = await RunCaptureAsync(
-            TapCtlExe, new[] { "create", "--name", AdapterName, "--hwid", "wintun" }, ct);
+            TapCtlExe, new[] { "create", "--name", AdapterName }, ct);
 
         if (createCode != 0)
         {
-            foreach (var l in createOut.Split('\n'))
-                if (l.Trim().Length > 0) Log("tapctl: " + l.Trim());
-            Log("ERROR: Could not create the Wintun network adapter. " +
+            foreach (var l in (pnpOut + "\n" + createOut).Split('\n'))
+                if (l.Trim().Length > 0) Log("setup: " + l.Trim());
+            Log("ERROR: Could not create the network adapter. " +
                 "Make sure the app is running as administrator.");
             return false;
         }
 
         Log($"Network adapter \"{AdapterName}\" ready.");
         return true;
+    }
+
+    /// <summary>Locates the bundled TAP-Windows6 .inf inside the driver folder.</summary>
+    private static string? FindTapInf()
+    {
+        if (!Directory.Exists(DriverDir)) return null;
+        var infs = Directory.GetFiles(DriverDir, "*.inf", SearchOption.AllDirectories);
+        // Prefer a path that mentions "tap" (the tap-windows6 driver folder).
+        return infs.FirstOrDefault(f => f.Contains("tap", StringComparison.OrdinalIgnoreCase))
+               ?? infs.FirstOrDefault();
     }
 
     /// <summary>Runs a console tool to completion and returns its exit code and combined output.</summary>

@@ -5,8 +5,8 @@ It connects through the **[VPN Gate](https://www.vpngate.net/)** public relay
 network — an academic volunteer VPN project run by the University of Tsukuba,
 Japan — so there are no accounts, subscriptions, or servers for you to set up.
 
-**OpenVPN** and the **Wintun** driver are bundled inside the app, so there is
-nothing else to install.
+**OpenVPN** and the **TAP-Windows6** network driver are bundled inside the app,
+so there is nothing else to install.
 
 <p align="center"><i>Pick a country → click Connect. That's it.</i></p>
 
@@ -75,15 +75,17 @@ doing under the hood.
       ▼
 ┌────────────┐   encrypted tunnel     ┌──────────────────────┐
 │ openvpn.exe│ ═════════════════════► │  chosen relay server │ ──► Internet
-│ + wintun   │                        └──────────────────────┘
+│ + TAP adpt │                        └──────────────────────┘
 └────────────┘
 ```
 
 - `VpnGateClient` downloads the live CSV server list from VPN Gate. Each row
   carries a complete, ready-to-use OpenVPN config (inline certs and keys).
-- `OpenVpnRunner` writes the chosen config to a temp file and launches the
-  bundled `openvpn.exe`, forcing the bundled Wintun driver
-  (`--windows-driver wintun`) so no legacy TAP driver install is needed.
+- `OpenVpnRunner` first makes sure a virtual network adapter exists: on the
+  very first connect it installs the bundled TAP-Windows6 driver (via Windows'
+  `pnputil`) and creates a reusable adapter named `FreeVPN` with `tapctl.exe`.
+  It then writes the chosen config to a temp file and launches the bundled
+  `openvpn.exe`, pointed at that adapter.
 - The GUI watches OpenVPN's output for `Initialization Sequence Completed`
   to flip to the **Connected** state.
 
@@ -111,11 +113,11 @@ You need Windows with the **.NET 8 SDK**. From `windows-vpn/`:
 # 1. Build the app
 dotnet publish src/FreeVpn/FreeVpn.csproj -c Release -r win-x64 --self-contained true -o publish
 
-# 2. Add OpenVPN (copy its bin folder) + Wintun next to the app
+# 2. Add OpenVPN (its bin folder + the TAP driver) next to the app
 #    (the CI workflow does this automatically — see vpn-build.yml)
 mkdir publish\openvpn
 copy "C:\Program Files\OpenVPN\bin\*" publish\openvpn\
-copy path\to\wintun.dll publish\openvpn\
+xcopy /E /I "C:\Program Files\OpenVPN\driver" publish\openvpn\driver
 
 # 3. Run
 publish\FreeVpn.exe
@@ -141,6 +143,6 @@ pushing a `v*` tag.
 
 - **[VPN Gate](https://www.vpngate.net/)** — University of Tsukuba, Japan.
 - **[OpenVPN](https://openvpn.net/)** — GPLv2, bundled unmodified.
-- **[Wintun](https://www.wintun.net/)** — by the WireGuard project.
+- **TAP-Windows6** — the OpenVPN virtual network driver, bundled unmodified.
 
 This client's own source is provided as-is for personal use.
