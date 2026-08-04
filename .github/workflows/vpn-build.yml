@@ -124,6 +124,73 @@ jobs:
           if (-not $inf) { throw "No driver .inf found under publish\openvpn\driver" }
           Write-Host "OK  driver: $($inf.FullName)"
 
+      - name: Live connection test (real Windows, real free server)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $ovpn = "publish\openvpn"
+          $inf  = (Get-ChildItem "$ovpn\driver" -Recurse -Filter *.inf | Select-Object -First 1).FullName
+
+          Write-Host "Installing TAP driver: $inf"
+          pnputil /add-driver "$inf" /install | Write-Host
+
+          Write-Host "Creating adapter 'FreeVPN' with tapctl..."
+          & "$ovpn\tapctl.exe" create --name FreeVPN | Write-Host
+          & "$ovpn\tapctl.exe" list | Write-Host
+
+          Write-Host "Fetching live VPN Gate server list..."
+          $csv = (Invoke-WebRequest "https://www.vpngate.net/api/iphone/" -UseBasicParsing).Content
+          $configs = New-Object System.Collections.Generic.List[string]
+          foreach ($l in ($csv -split "`n")) {
+            if ($l.Length -eq 0 -or $l[0] -eq '*' -or $l[0] -eq '#') { continue }
+            $f = $l -split ","
+            if ($f.Count -lt 15) { continue }
+            $b64 = $f[14].Trim()
+            if ($b64.Length -lt 100) { continue }
+            try { $d = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b64)) } catch { continue }
+            if ($d -notmatch "remote ") { continue }
+            # Prefer TCP configs (runner-firewall friendly); collect up to a handful.
+            if ($d -match "proto tcp") { $configs.Insert(0, $d) } else { $configs.Add($d) }
+            if ($configs.Count -ge 8) { break }
+          }
+          if ($configs.Count -eq 0) { throw "No usable VPN Gate configs returned" }
+
+          $extra = @(
+            "resolv-retry infinite","nobind","auth-nocache","route-nopull",
+            "connect-timeout 15","connect-retry-max 1",
+            "data-ciphers AES-256-GCM:AES-128-GCM:AES-256-CBC:AES-128-CBC",
+            "data-ciphers-fallback AES-128-CBC"
+          ) -join "`n"
+
+          $ok = $false
+          $tried = 0
+          foreach ($cfg in $configs) {
+            if ($ok -or $tried -ge 5) { break }
+            $tried++
+            Set-Content -Path test.ovpn -Value ($cfg + "`n" + $extra + "`n") -Encoding ascii
+            Remove-Item ovpn.log,ovpn.err -ErrorAction SilentlyContinue
+            Write-Host "--- Attempt $tried ---"
+            $p = Start-Process -FilePath "$ovpn\openvpn.exe" `
+                 -ArgumentList @("--config","test.ovpn","--windows-driver","tap-windows6","--dev-node","FreeVPN","--verb","3") `
+                 -NoNewWindow -PassThru -RedirectStandardOutput ovpn.log -RedirectStandardError ovpn.err
+            for ($i=0; $i -lt 30; $i++) {
+              Start-Sleep -Seconds 1
+              $c = (Get-Content ovpn.log -Raw -ErrorAction SilentlyContinue)
+              if ($c -match "Initialization Sequence Completed") { $ok = $true; break }
+              if ($c -match "Exiting due to fatal error" -or $p.HasExited) { break }
+            }
+            if (-not $p.HasExited) { $p.Kill(); $p.WaitForExit() }
+            Write-Host (Get-Content ovpn.log -Raw -ErrorAction SilentlyContinue)
+          }
+
+          Write-Host "Cleaning up test adapter..."
+          & "$ovpn\tapctl.exe" delete FreeVPN 2>$null | Write-Host
+
+          if (-not $ok) { throw "LIVE CONNECTION TEST FAILED after $tried attempts (no 'Initialization Sequence Completed')" }
+          Write-Host "==================================================="
+          Write-Host " LIVE CONNECTION TEST PASSED - tunnel established"
+          Write-Host "==================================================="
+
       - name: Create portable ZIP
         shell: pwsh
         run: |
