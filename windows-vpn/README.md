@@ -12,14 +12,39 @@ nothing else to install.
 
 ---
 
-## Download & run
+## Get the app
 
-Grab the latest build from the **[Releases page](../../releases)**:
+The app is built automatically on Windows by GitHub Actions. There are two
+ways to get the finished `.exe` — pick whichever is easier for you.
+
+### Option A — download the ready-made build (quickest)
+
+1. Open the repo's **Actions** tab → the latest green **“Build Free VPN (Windows)”** run.
+2. Scroll to **Artifacts** and download **`FreeVpn-windows`** (a zip).
+3. Unzip it. Inside you'll find:
+   - `FreeVpn-Setup-1.0.0.exe` — the installer (recommended)
+   - `FreeVpn-Portable-1.0.0.zip` — the portable version (unzip, run `FreeVpn.exe`)
+
+*(GitHub requires you to be signed in to download run artifacts, and they’re
+kept for 90 days.)*
+
+### Option B — publish a permanent Release (one click)
+
+This puts the installer on a clean **Releases page** anyone can download without
+signing in:
+
+- **Easiest:** Actions tab → *Build Free VPN (Windows)* → **Run workflow** →
+  keep **“Publish a GitHub Release”** ticked → **Run**. When it finishes, the
+  installer and portable zip appear on the **[Releases page](../../releases)**.
+- **Or** push a version tag and the release is built automatically:
+  ```bash
+  git tag v1.0.0 && git push origin v1.0.0
+  ```
 
 | File | What it is |
 |------|------------|
-| `FreeVpn-Setup-x.y.z.exe` | Installer (recommended) — adds Start-menu/desktop shortcuts |
-| `FreeVpn-Portable-x.y.z.zip` | Portable — unzip anywhere and run `FreeVpn.exe` |
+| `FreeVpn-Setup-1.0.0.exe` | Installer (recommended) — adds Start-menu/desktop shortcuts |
+| `FreeVpn-Portable-1.0.0.zip` | Portable — unzip anywhere and run `FreeVpn.exe` |
 
 The app asks for administrator rights when it starts. This is required so it
 can create the virtual network adapter and set up routing — the same thing
