@@ -36,6 +36,13 @@ public sealed class OpenVpnRunner : IDisposable
     public static string OpenVpnExe =>
         Path.Combine(OpenVpnDir, "openvpn.exe");
 
+    /// <summary>tapctl.exe ships in the OpenVPN bin folder; it creates adapters.</summary>
+    public static string TapCtlExe =>
+        Path.Combine(OpenVpnDir, "tapctl.exe");
+
+    /// <summary>Name of the dedicated Wintun adapter this app creates and reuses.</summary>
+    private const string AdapterName = "FreeVPN";
+
     public static bool IsInstalled => File.Exists(OpenVpnExe);
 
     public async Task ConnectAsync(ServerInfo server, CancellationToken ct = default)
@@ -51,6 +58,15 @@ public sealed class OpenVpnRunner : IDisposable
 
         SetState(VpnState.Connecting);
         Log($"Preparing connection to {server.CountryLong} ({server.Ip})...");
+
+        // OpenVPN on Windows does not create the virtual adapter itself; it
+        // expects one to already exist. Create (once) a dedicated Wintun
+        // adapter with the bundled tapctl.exe, then reuse it on later connects.
+        if (!await EnsureAdapterAsync(ct))
+        {
+            SetState(VpnState.Error);
+            return;
+        }
 
         // Write the config to a private temp file.
         var dir = Path.Combine(Path.GetTempPath(), "FreeVpn");
@@ -72,9 +88,11 @@ public sealed class OpenVpnRunner : IDisposable
         };
         psi.ArgumentList.Add("--config");
         psi.ArgumentList.Add(_configPath);
-        // Force the bundled Wintun driver (no legacy TAP install needed).
+        // Use the bundled Wintun driver and the specific adapter we created.
         psi.ArgumentList.Add("--windows-driver");
         psi.ArgumentList.Add("wintun");
+        psi.ArgumentList.Add("--dev-node");
+        psi.ArgumentList.Add(AdapterName);
         psi.ArgumentList.Add("--verb");
         psi.ArgumentList.Add("3");
 
@@ -145,6 +163,69 @@ public sealed class OpenVpnRunner : IDisposable
 
         if (State != VpnState.Disconnected)
             SetState(VpnState.Disconnected);
+    }
+
+    /// <summary>
+    /// Makes sure a Wintun adapter named <see cref="AdapterName"/> exists,
+    /// creating it with tapctl.exe if needed. Returns false (and logs) on failure.
+    /// </summary>
+    private async Task<bool> EnsureAdapterAsync(CancellationToken ct)
+    {
+        if (!File.Exists(TapCtlExe))
+        {
+            Log("ERROR: tapctl.exe is missing from the bundle; cannot create the network adapter.");
+            return false;
+        }
+
+        // Is our adapter already present from a previous run?
+        var (listCode, listOut) = await RunCaptureAsync(TapCtlExe, new[] { "list" }, ct);
+        if (listCode == 0 && listOut.Contains(AdapterName, StringComparison.OrdinalIgnoreCase))
+        {
+            Log($"Using existing network adapter \"{AdapterName}\".");
+            return true;
+        }
+
+        Log($"Creating network adapter \"{AdapterName}\" (first run may take a few seconds)...");
+        var (createCode, createOut) = await RunCaptureAsync(
+            TapCtlExe, new[] { "create", "--name", AdapterName, "--hwid", "wintun" }, ct);
+
+        if (createCode != 0)
+        {
+            foreach (var l in createOut.Split('\n'))
+                if (l.Trim().Length > 0) Log("tapctl: " + l.Trim());
+            Log("ERROR: Could not create the Wintun network adapter. " +
+                "Make sure the app is running as administrator.");
+            return false;
+        }
+
+        Log($"Network adapter \"{AdapterName}\" ready.");
+        return true;
+    }
+
+    /// <summary>Runs a console tool to completion and returns its exit code and combined output.</summary>
+    private static async Task<(int code, string output)> RunCaptureAsync(
+        string exe, string[] args, CancellationToken ct)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = exe,
+            WorkingDirectory = OpenVpnDir,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach (var a in args) psi.ArgumentList.Add(a);
+
+        using var p = new Process { StartInfo = psi };
+        var sb = new StringBuilder();
+        p.OutputDataReceived += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+        p.ErrorDataReceived += (_, e) => { if (e.Data != null) sb.AppendLine(e.Data); };
+        p.Start();
+        p.BeginOutputReadLine();
+        p.BeginErrorReadLine();
+        await p.WaitForExitAsync(ct);
+        return (p.ExitCode, sb.ToString());
     }
 
     /// <summary>
