@@ -113,12 +113,16 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.make_release)
+        # Runs on any push (branch or tag) and on manual dispatch. The
+        # workflow's own GITHUB_TOKEN has contents:write, so it can create the
+        # Release and its tag directly — no tag push needed from the client.
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.make_release)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}-build{1}', env.APP_VERSION, github.run_number) }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', env.APP_VERSION) }}
           name: Free VPN ${{ env.APP_VERSION }}
-          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+          prerelease: false
+          make_latest: true
           generate_release_notes: false
           body: |
             ## Free VPN ${{ env.APP_VERSION }}
