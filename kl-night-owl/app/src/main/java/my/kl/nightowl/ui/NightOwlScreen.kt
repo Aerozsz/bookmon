@@ -160,9 +160,10 @@ fun NightOwlScreen(vm: NightOwlViewModel) {
                     }
                 },
                 actions = {
-                    // The button stays in place while refreshing (spinner inside it), so focus never
-                    // jumps to the search box and pops up the keyboard.
-                    IconButton(onClick = { vm.refresh() }, enabled = !data.refreshing, modifier = Modifier.testTag("refresh")) {
+                    // The button stays in place and enabled while refreshing (spinner inside it; extra
+                    // taps are ignored), so it keeps focus instead of passing it to the search box,
+                    // which would pop up the keyboard.
+                    IconButton(onClick = { vm.refresh() }, modifier = Modifier.testTag("refresh")) {
                         if (data.refreshing) {
                             CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
                         } else {
