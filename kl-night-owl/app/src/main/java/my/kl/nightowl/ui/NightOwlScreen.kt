@@ -66,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -105,6 +106,7 @@ fun NightOwlScreen(vm: NightOwlViewModel) {
     val travelMode by vm.travelMode.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     var tab by rememberSaveable { mutableIntStateOf(TAB_LIST) }
     var showAbout by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
@@ -163,7 +165,13 @@ fun NightOwlScreen(vm: NightOwlViewModel) {
                     // The button stays in place and enabled while refreshing (spinner inside it; extra
                     // taps are ignored), so it keeps focus instead of passing it to the search box,
                     // which would pop up the keyboard.
-                    IconButton(onClick = { vm.refresh() }, modifier = Modifier.testTag("refresh")) {
+                    IconButton(
+                        onClick = {
+                            focusManager.clearFocus()
+                            vm.refresh()
+                        },
+                        modifier = Modifier.testTag("refresh"),
+                    ) {
                         if (data.refreshing) {
                             CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
                         } else {

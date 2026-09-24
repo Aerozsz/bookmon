@@ -98,6 +98,8 @@ class NightOwlAppTest {
 
     @Before
     fun waitForData() {
+        // A real phone is in touch mode as soon as it's touched; injected test taps don't switch it.
+        instrumentation.setInTouchMode(true)
         activity = compose.activity
         vm = compose.runOnUiThread { ViewModelProvider(activity)[NightOwlViewModel::class.java] }
         compose.waitUntil(60_000) { vm.data.value.places.isNotEmpty() }
