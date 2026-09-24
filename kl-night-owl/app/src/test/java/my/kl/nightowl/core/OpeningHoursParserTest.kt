@@ -119,6 +119,44 @@ class OpeningHoursParserTest {
         assertEquals("07:00 – 03:00", HoursText(use24h = true).day(s.days[0]))
     }
 
+    @Test fun realWorldFormatsFromKualaLumpur() {
+        // Narrow no-break spaces, as copied from Google Maps.
+        val a = parse("Monday, 5\u202Fpm\u20133\u202Fam")
+        assertTrue(a.isOpenAt(at(1, 2)))
+        assertFalse(a.isOpenAt(at(2, 2)))
+        assertTrue(parse("Tuesday-Sunday 830pm-5am").isOpenAt(at(3, 4)))
+        assertFalse(parse("Mo-Su 0900-1800").isOpenAtNight)
+        assertFalse(parse("Mo-Su 00:00-23:59").isOpenAt(at(2, 23, 59)).not())
+        assertTrue(parse("Mo-Su,PH 00:00-23:59").isAlwaysOpen)
+    }
+
+    @Test fun twelveHourSlips() {
+        assertFalse("10:00-10:00 is 10 AM-10 PM", parse("Mo-Su 10:00-10:00").isOpenAtNight)
+        assertFalse("17:00-12:00 is until midnight", parse("Mo-Sa 18:00-12:00").isOpenAtNight)
+        assertFalse("10:00-09:00 is 10 AM-9 PM", parse("Tu-Su 10:00-09:00").isOpenAtNight)
+        // Real long hours stay as they are.
+        assertTrue(parse("Mo-Su 07:30-05:00").isOpenAt(at(2, 4)))
+        assertTrue(parse("Mo-Su 06:00-05:00").isOpenAt(at(2, 4)))
+        assertTrue(parse("00:00-00:00").isAlwaysOpen)
+    }
+
+    @Test fun offWithTimesOnlyClosesThoseTimes() {
+        val s = parse("24/7; Fr 13:00-14:00 off")
+        assertTrue(s.isOpenAt(at(4, 2)))
+        assertFalse(s.isOpenAt(at(4, 13, 30)))
+        assertTrue(s.isOpenAt(at(4, 23)))
+    }
+
+    @Test fun daysWithoutTimesAreUnknown() {
+        assertNull(OpeningHoursParser.parse("Mon - Saturday"))
+        assertNull(OpeningHoursParser.parse("Sa,Su"))
+    }
+
+    @Test fun malformedMinutesDontInventNightHours() {
+        val s = OpeningHoursParser.parse("Mo-Su 06:030-22:30")
+        assertTrue(s == null || !s.isOpenAtNight)
+    }
+
     @Test fun allNightText() {
         val s = parse("Mo-Su 20:00-08:00")
         assertEquals("Open all night", text.night(s.nightCoverage(4)))

@@ -131,6 +131,9 @@ object PlaceBuilder {
             "pharmacy" -> return Category.PHARMACY
             "internet_cafe" -> return Category.OTHER
         }
+        if (tags["shop"] == "convenience" && PETROL_SHOP.containsMatchIn(tags["name"].orEmpty() + " " + tags["brand"].orEmpty())) {
+            return Category.PETROL
+        }
         return when (tags["shop"]) {
             null, "no", "vacant" -> null
             "yes" -> Category.OTHER
@@ -142,19 +145,24 @@ object PlaceBuilder {
         }
     }
 
+    /** Shops inside petrol stations, which OSM often tags as plain convenience stores. */
+    private val PETROL_SHOP = Regex("""(?i)\b(mesra|shell select|bhpetromart|petromart|petron treats|caltex star ?mart)\b""")
+
     // Chains whose Kuala Lumpur branches are open round the clock, used only when OSM has no hours.
-    private val CONVENIENCE_24H = Regex("""(?i)\b(7[\s-]?eleven|seven[\s-]?eleven|family\s?mart|kk\s?(super\s?)?mart|lawson)\b|^cu$|\bcu\s+mart\b""")
-    private val FUEL_24H = Regex("""(?i)\b(petronas|shell|petron|caltex|bhp|bhpetrol)\b""")
-    private val MAMAK_24H = Regex("""(?i)\b(nasi\s+kandar\s+pelita|pelita\s+nasi\s+kandar|restoran\s+pelita|ali\s+maju|kudu\s+bin\s+abdul)\b""")
+    // Names must start with the chain name so that e.g. "Malliga Family Mart" doesn't count.
+    private val CONVENIENCE_24H = Regex("""(?i)^\s*(7[\s-]?eleven|seven[\s-]?eleven|family\s?mart|kk\s?(super\s?)?mart|lawson|cu)\b""")
+    private val FUEL_24H = Regex("""(?i)^\s*(petronas|shell|petron|caltex|bhp|bhpetrol)\b""")
+    private val MAMAK_24H = Regex("""(?i)^\s*(restoran\s+)?(nasi\s+kandar\s+pelita|pelita\s+nasi\s+kandar|pelita|(nasi\s+kandar\s+)?ali\s+maju)\b""")
 
     private fun usuallyOpen24h(category: Category, tags: Map<String, String>): Boolean {
-        val who = listOfNotNull(tags["brand"], tags["name"], tags["operator"], tags["name:en"]).joinToString(" | ")
-        return when (category) {
-            Category.KONBINI -> CONVENIENCE_24H.containsMatchIn(who)
-            Category.PETROL -> FUEL_24H.containsMatchIn(who)
-            Category.RESTAURANT, Category.FAST_FOOD -> MAMAK_24H.containsMatchIn(who)
-            else -> false
+        val candidates = listOfNotNull(tags["brand"], tags["name"], tags["name:en"])
+        val chain = when (category) {
+            Category.KONBINI -> CONVENIENCE_24H
+            Category.PETROL -> FUEL_24H
+            Category.RESTAURANT, Category.FAST_FOOD -> MAMAK_24H
+            else -> return false
         }
+        return candidates.any { chain.containsMatchIn(it) }
     }
 
     private fun displayName(tags: Map<String, String>): String? {
@@ -190,7 +198,7 @@ object PlaceBuilder {
             ?.take(3)
             ?.joinToString(", ") { it.replaceFirstChar(Char::uppercase) }
             ?.ifEmpty { null }
-        val brand = (tags["brand"] ?: tags["operator"])?.takeIf { b ->
+        val brand = tags["brand"]?.takeIf { b ->
             !tags["name"].orEmpty().contains(b, ignoreCase = true)
         }
         val nameLower = tags["name"].orEmpty().lowercase()
@@ -212,6 +220,7 @@ object PlaceBuilder {
             amenity == "fuel" -> if (shop != null) "Petrol station with shop" else "Petrol station"
             amenity == "pharmacy" -> "Pharmacy"
             amenity == "internet_cafe" -> "Cybercafé"
+            category == Category.PETROL -> "Petrol station shop"
             shop == "convenience" -> "Convenience store"
             shop == "kiosk" -> "Kiosk"
             shop == "newsagent" -> "Newsagent & convenience"

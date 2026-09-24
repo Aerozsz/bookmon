@@ -117,11 +117,21 @@ object OpeningHoursParser {
         for (ruleText in text.split(';', '|').map { it.trim() }.filter { it.isNotEmpty() }) {
             val rules = parseRuleText(tokenize(ruleText)) ?: continue
             for (rule in rules) {
-                if (!rule.additional) {
-                    for (d in rule.days) days[d].clear()
-                }
+                val partialOff = rule.off && rule.spans.isNotEmpty()
                 for (d in rule.days) {
-                    if (rule.off) days[d].clear() else days[d].addAll(rule.spans)
+                    when {
+                        // "24/7; Fr 13:00-14:00 off" closes only during those times.
+                        partialOff -> {
+                            val remaining = subtract(days[d], rule.spans)
+                            days[d].clear()
+                            days[d].addAll(remaining)
+                        }
+                        rule.off -> days[d].clear()
+                        else -> {
+                            if (!rule.additional) days[d].clear()
+                            days[d].addAll(rule.spans)
+                        }
+                    }
                 }
                 applied = true
             }
@@ -130,18 +140,35 @@ object OpeningHoursParser {
         return WeeklySchedule(days.map { it.toList() })
     }
 
+    private fun subtract(spans: List<Interval>, cut: List<Interval>): List<Interval> {
+        var result = spans
+        for (c in cut) {
+            result = result.flatMap { s ->
+                if (c.end <= s.start || c.start >= s.end) listOf(s)
+                else listOfNotNull(
+                    Interval(s.start, c.start).takeIf { it.length > 0 },
+                    Interval(c.end, s.end).takeIf { it.length > 0 },
+                )
+            }
+        }
+        return result
+    }
+
     // ---------------------------------------------------------------- normalisation
 
-    private val AM_PM = Regex("""(?i)\b(\d{1,2})(?:[:.](\d{2}))?\s*([ap])\.?\s*m\b\.?""")
+    private val AM_PM = Regex("""(?i)\b(\d{1,2})(?:[:.]?(\d{2}))?\s*([ap])\.?\s*m\b\.?""")
+    private val FOUR_DIGIT_RANGE = Regex("""\b([0-2]\d)([0-5]\d)\s*-\s*([0-2]\d)([0-5]\d)\b""")
     private val TWENTY_FOUR_SEVEN = Regex("""(?i)\b24\s*(?:/|x|\s)\s*7\b""")
     private val TWENTY_FOUR_HOURS = Regex("""(?i)(?:\bopen\s+)?\b24\s*-?\s*(?:hours|hour|hrs|hr|h|jam)\b""")
 
     internal fun normalize(raw: String): String {
         var s = raw
             .replace('–', '-').replace('—', '-').replace('−', '-').replace('‒', '-')
-            .replace('~', '-').replace('：', ':').replace(' ', ' ')
+            .replace('~', '-').replace('：', ':')
+            .replace(Regex("[\\u00A0\\u2000-\\u200B\\u202F\\u205F\\u3000]"), " ")
         s = TWENTY_FOUR_SEVEN.replace(s, "24/7")
         s = TWENTY_FOUR_HOURS.replace(s, "00:00-24:00")
+        s = FOUR_DIGIT_RANGE.replace(s, "$1:$2-$3:$4") // "0900-1800"
         s = AM_PM.replace(s) { m ->
             var h = m.groupValues[1].toInt()
             val min = m.groupValues[2].ifEmpty { "00" }
@@ -173,7 +200,7 @@ object OpeningHoursParser {
     private data object Plus : Tok
     private data object Always : Tok // 24/7
 
-    private val TIME_RE = Regex("""(\d{1,2})[:.h](\d{2})""")
+    private val TIME_RE = Regex("""(\d{1,2})[:.h](\d{2})(?!\d)""")
 
     private fun tokenize(s: String): List<Tok> {
         val out = mutableListOf<Tok>()
@@ -332,12 +359,11 @@ object OpeningHoursParser {
                 off -> true
                 spans.isNotEmpty() -> true
                 open -> true
-                sawDay && !junk -> true // "Mo-Fr" alone means open all day
-                else -> false
+                else -> false // e.g. "Mon - Saturday" with no times: hours unknown
             }
             if (usable) {
                 val finalSpans = when {
-                    off -> emptyList()
+                    off -> spans // times to close; empty means closed all day
                     sawAlways || spans.isEmpty() -> listOf(Interval(0, MINUTES_PER_DAY))
                     else -> spans
                 }
@@ -351,14 +377,20 @@ object OpeningHoursParser {
 
     private fun timeOf(t: Tok?): Int? = when (t) {
         is TimeTok -> t.minutes.takeIf { it <= 48 * 60 }
-        is NumTok -> (t.value * 60).takeIf { t.value in 0..48 }
+        is NumTok -> (t.value * 60).takeIf { t.value in 0..24 }
         else -> null
     }
 
     private fun span(start: Int, endRaw: Int, bareEnd: Boolean = false): Interval {
         var end = endRaw
+        if (end == 23 * 60 + 59) end = MINUTES_PER_DAY // "00:00-23:59" means all day
         // A bare "9-5" means 9 AM to 5 PM, not an overnight shift.
         if (bareEnd && end <= start && end + 12 * 60 > start) end += 12 * 60
+        // Common 12-hour slips: "10:00-10:00" is 10 AM-10 PM, "17:00-12:00" is until midnight.
+        if (end == start && start in 60..12 * 60) end += 12 * 60
+        if (end == 12 * 60 && start > 12 * 60) end = MINUTES_PER_DAY
+        // "10:00-09:00" (23 h) is almost surely 10 AM-9 PM; genuine long hours like 07:00-05:00 are kept.
+        if (end < start && start >= 9 * 60 && end <= 12 * 60 && end + MINUTES_PER_DAY - start > 22 * 60) end += 12 * 60
         if (end <= start) end += MINUTES_PER_DAY
         if (end - start > MINUTES_PER_DAY) end = start + MINUTES_PER_DAY
         return Interval(start, end)

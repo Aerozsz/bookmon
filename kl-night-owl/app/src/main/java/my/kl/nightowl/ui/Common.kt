@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -17,6 +18,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import my.kl.nightowl.core.Category
+import my.kl.nightowl.core.Place
 import my.kl.nightowl.ui.theme.AllDayContainer
 import my.kl.nightowl.ui.theme.ClosedRose
 import my.kl.nightowl.ui.theme.ClosedRoseContainer
@@ -57,6 +59,13 @@ fun StatusPill(ui: PlaceUi, modifier: Modifier = Modifier) {
             .padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }
+
+/** Address to show for [place]; looks one up from the coordinates when OpenStreetMap has none. */
+@Composable
+fun rememberAddress(place: Place, lookup: suspend (Place) -> String?): String? =
+    produceState(initialValue = place.address, place.id) {
+        if (value == null) value = lookup(place)
+    }.value
 
 fun formatDistance(meters: Double?): String? = when {
     meters == null -> null

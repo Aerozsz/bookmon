@@ -210,6 +210,7 @@ fun NightOwlScreen(vm: NightOwlViewModel) {
                             tab = TAB_MAP
                         },
                         onDirections = openRoute,
+                        lookupAddress = vm::addressFor,
                     )
                     else -> MapTab(
                         vm = vm,

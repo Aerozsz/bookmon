@@ -1,6 +1,7 @@
 package my.kl.nightowl.ui
 
 import android.app.Application
+import android.location.Geocoder
 import android.location.Location
 import android.text.format.DateFormat
 import androidx.lifecycle.AndroidViewModel
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import my.kl.nightowl.core.Category
 import my.kl.nightowl.core.Geo
 import my.kl.nightowl.core.HoursText
@@ -32,6 +34,8 @@ import my.kl.nightowl.data.TravelMode
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 val KL_ZONE: ZoneId = ZoneId.of("Asia/Kuala_Lumpur")
 
@@ -187,6 +191,22 @@ class NightOwlViewModel(app: Application) : AndroidViewModel(app) {
     fun focusConsumed() {
         _focus.value = null
     }
+
+    private val lookedUpAddresses = ConcurrentHashMap<String, String>()
+
+    /** The OpenStreetMap address, or else one looked up from the coordinates (many shops have none). */
+    suspend fun addressFor(place: Place): String? {
+        place.address?.let { return it }
+        lookedUpAddresses[place.id]?.let { return it }
+        if (!Geocoder.isPresent()) return null
+        val found = withContext(Dispatchers.IO) { runCatching { reverseGeocode(place.lat, place.lon) }.getOrNull() }
+        if (found != null) lookedUpAddresses[place.id] = found
+        return found
+    }
+
+    @Suppress("DEPRECATION") // the callback version needs Android 13; this one works everywhere
+    private fun reverseGeocode(lat: Double, lon: Double): String? =
+        Geocoder(getApplication<Application>(), Locale.ENGLISH).getFromLocation(lat, lon, 1)?.firstOrNull()?.getAddressLine(0)
 
     fun setTravelMode(mode: TravelMode) {
         _travelMode.value = mode

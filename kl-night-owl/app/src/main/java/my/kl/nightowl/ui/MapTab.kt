@@ -140,6 +140,7 @@ fun MapTab(
             (selected ?: lastSelected[0])?.let { ui ->
                 SelectedPlaceCard(
                     ui = ui,
+                    lookupAddress = vm::addressFor,
                     travelMode = travelMode,
                     onTravelMode = vm::setTravelMode,
                     onDirections = { onDirections(ui.place) },
@@ -153,6 +154,7 @@ fun MapTab(
 @Composable
 private fun SelectedPlaceCard(
     ui: PlaceUi,
+    lookupAddress: suspend (Place) -> String?,
     travelMode: TravelMode,
     onTravelMode: (TravelMode) -> Unit,
     onDirections: () -> Unit,
@@ -215,7 +217,7 @@ private fun SelectedPlaceCard(
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
-            ui.place.address?.let {
+            rememberAddress(ui.place, lookupAddress)?.let {
                 Text(
                     it,
                     style = MaterialTheme.typography.bodySmall,

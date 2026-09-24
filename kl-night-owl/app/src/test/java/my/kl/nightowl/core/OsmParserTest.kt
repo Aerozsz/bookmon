@@ -30,14 +30,18 @@ class OsmParserTest {
             { "type": "node", "id": 8, "lat": 3.12, "lon": 101.67,
               "tags": { "shop": "convenience", "name": "Kedai Runcit Ah Chong" } },
             { "type": "node", "id": 9, "lat": 3.11, "lon": 101.66,
-              "tags": { "disused:shop": "convenience", "name": "Old 7-Eleven", "opening_hours": "24/7" } }
+              "tags": { "disused:shop": "convenience", "name": "Old 7-Eleven", "opening_hours": "24/7" } },
+            { "type": "node", "id": 10, "lat": 3.10, "lon": 101.65,
+              "tags": { "shop": "convenience", "name": "Malliga Family Mart" } },
+            { "type": "node", "id": 11, "lat": 3.09, "lon": 101.64,
+              "tags": { "shop": "convenience", "name": "Mesra", "opening_hours": "24/7" } }
           ]
         }
     """.trimIndent()
 
     @Test fun parsesNightPlaces() {
         val result = OsmParser.parse(sample)
-        assertEquals(9, result.elementCount)
+        assertEquals(11, result.elementCount)
         assertEquals("2026-09-20T10:00:00Z", result.snapshot)
         val byName = result.places.associateBy { it.name }
 
@@ -59,6 +63,9 @@ class OsmParserTest {
         assertFalse("day-only cafe", "Day Cafe" in byName)
         assertFalse("no hours, not a 24h chain", "Kedai Runcit Ah Chong" in byName)
         assertFalse("disused", "Old 7-Eleven" in byName)
+        assertFalse("not the FamilyMart chain", "Malliga Family Mart" in byName)
+        assertEquals(Category.PETROL, byName.getValue("Mesra").category)
+        assertEquals("Petrol station shop", byName.getValue("Mesra").kind)
         assertEquals(listOf("call us"), result.unreadableHours)
     }
 

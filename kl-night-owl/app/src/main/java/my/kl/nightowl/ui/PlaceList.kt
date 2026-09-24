@@ -64,6 +64,7 @@ fun PlaceList(
     onRefresh: () -> Unit,
     onShowOnMap: (Place) -> Unit,
     onDirections: (Place) -> Unit,
+    lookupAddress: suspend (Place) -> String?,
 ) {
     var expandedId by rememberSaveable { mutableStateOf<String?>(null) }
     PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
@@ -100,6 +101,7 @@ fun PlaceList(
                         onToggle = { expandedId = if (expandedId == ui.place.id) null else ui.place.id },
                         onShowOnMap = { onShowOnMap(ui.place) },
                         onDirections = { onDirections(ui.place) },
+                        lookupAddress = lookupAddress,
                     )
                 }
                 item(key = "footer") {
@@ -127,6 +129,7 @@ fun PlaceCard(
     onToggle: () -> Unit,
     onShowOnMap: () -> Unit,
     onDirections: () -> Unit,
+    lookupAddress: suspend (Place) -> String?,
 ) {
     val place = ui.place
     val context = LocalContext.current
@@ -157,6 +160,15 @@ fun PlaceCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    if (!expanded && place.address != null) {
+                        Text(
+                            place.address,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 Spacer(Modifier.width(8.dp))
                 StatusPill(ui)
@@ -208,7 +220,7 @@ fun PlaceCard(
                             modifier = Modifier.padding(top = 6.dp),
                         )
                     }
-                    place.address?.let { InfoRow(Icons.Filled.Place, it) }
+                    rememberAddress(place, lookupAddress)?.let { InfoRow(Icons.Filled.Place, it) }
                     place.phone?.let { phone -> InfoRow(Icons.Filled.Phone, phone) { dial(context, phone) } }
                     place.website?.let { url -> InfoRow(Icons.Filled.Language, url) { openWebsite(context, url) } }
                 }
