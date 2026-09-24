@@ -1,4 +1,4 @@
-[out:json][timeout:180];
+[out:json][timeout:90];
 {{AREA}}
 (
   nwr["shop"]["opening_hours"]{{SCOPE}};

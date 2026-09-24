@@ -1,6 +1,7 @@
 package my.kl.nightowl.data
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -61,14 +62,25 @@ class PlacesRepository(private val context: Context) {
         val template = context.assets.open(QUERY_ASSET).bufferedReader().use { it.readText() }
         var lastError: Exception? = null
         var onlyOlderCopies = false
+        val deadline = System.currentTimeMillis() + REFRESH_BUDGET_MS
         // Ask every server for the places inside the Kuala Lumpur boundary first. Only if none of
         // them can resolve the boundary, fall back to a rectangle around the city.
-        for (useArea in listOf(true, false)) {
+        servers@ for (useArea in listOf(true, false)) {
             val query = OverpassQuery.build(template, useArea)
             for (endpoint in OverpassQuery.ENDPOINTS) {
+                if (System.currentTimeMillis() > deadline) {
+                    Log.w(TAG, "refresh: out of time, keeping current data")
+                    break@servers
+                }
+                val started = System.currentTimeMillis()
                 try {
                     val body = post(endpoint, query)
                     val result = OsmParser.parse(body)
+                    Log.i(
+                        TAG,
+                        "refresh: $endpoint area=$useArea -> ${result.elementCount} elements, " +
+                            "${result.places.size} places, snapshot ${result.snapshot} in ${System.currentTimeMillis() - started} ms",
+                    )
                     if (result.remark != null && result.elementCount == 0) throw IOException(result.remark)
                     if (result.elementCount == 0) continue // this server can't resolve the boundary
                     if (result.places.isEmpty()) throw IOException("No night places in response")
@@ -87,6 +99,7 @@ class PlacesRepository(private val context: Context) {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    Log.w(TAG, "refresh: $endpoint area=$useArea failed after ${System.currentTimeMillis() - started} ms: $e")
                     lastError = e
                 }
             }
@@ -100,8 +113,8 @@ class PlacesRepository(private val context: Context) {
         try {
             conn.requestMethod = "POST"
             conn.doOutput = true
-            conn.connectTimeout = 20_000
-            conn.readTimeout = 200_000
+            conn.connectTimeout = 15_000
+            conn.readTimeout = 100_000
             conn.setRequestProperty("User-Agent", "KLNightOwl/${BuildConfig.VERSION_NAME} (Android app)")
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
             conn.outputStream.use { it.write(("data=" + URLEncoder.encode(query, "UTF-8")).toByteArray()) }
@@ -116,5 +129,9 @@ class PlacesRepository(private val context: Context) {
     companion object {
         const val SEED_ASSET = "overpass_seed.json"
         const val QUERY_ASSET = "overpass_query.txt"
+        private const val TAG = "NightOwlRepo"
+
+        /** A refresh never keeps the spinner going longer than this; the current data stays in use. */
+        private const val REFRESH_BUDGET_MS = 150_000L
     }
 }

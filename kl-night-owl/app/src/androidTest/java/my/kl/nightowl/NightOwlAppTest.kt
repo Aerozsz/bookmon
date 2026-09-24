@@ -350,7 +350,7 @@ class NightOwlAppTest {
         val countBefore = vm.data.value.places.size
         compose.onNodeWithTag("refresh").performClick()
         compose.waitUntil(10_000) { vm.data.value.refreshing || vm.data.value.lastRefresh != null }
-        compose.waitUntil(300_000) { !vm.data.value.refreshing && vm.data.value.lastRefresh != null }
+        compose.waitUntil(200_000) { !vm.data.value.refreshing && vm.data.value.lastRefresh != null }
         val data = vm.data.value
         log("refresh: outcome=${data.lastRefresh}, source=${data.source}, places=${data.places.size}, snapshot $before -> ${data.snapshotIso}")
         assertTrue(
@@ -374,7 +374,7 @@ class NightOwlAppTest {
     fun t15_pullToRefreshStartsAnUpdate() {
         compose.onNodeWithTag("place_list").performTouchInput { swipeDown(startY = top + 20f, endY = bottom, durationMillis = 800) }
         compose.waitUntil(10_000) { vm.data.value.refreshing }
-        compose.waitUntil(300_000) { !vm.data.value.refreshing }
+        compose.waitUntil(200_000) { !vm.data.value.refreshing }
         log("pull-to-refresh finished: outcome=${vm.data.value.lastRefresh}, snapshot=${vm.data.value.snapshotIso}")
         assertTrue(vm.data.value.lastRefresh != RefreshOutcome.FAILED)
     }

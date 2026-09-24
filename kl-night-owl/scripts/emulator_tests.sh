@@ -38,7 +38,7 @@ fi
 adb logcat -d > "$OUT/logcat-tests.txt"
 {
   echo "== Test log lines"
-  grep -E "NightOwlTest" "$OUT/logcat-tests.txt" | sed 's/^.*NightOwlTest: //'
+  grep -E "NightOwlTest|NightOwlRepo" "$OUT/logcat-tests.txt" | sed -E 's/^.*(NightOwlTest|NightOwlRepo): //'
   echo "== Crashes during tests"
   grep -A25 "FATAL EXCEPTION" "$OUT/logcat-tests.txt" | head -120
 } >> "$SUMMARY"
