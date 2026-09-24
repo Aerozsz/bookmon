@@ -347,6 +347,7 @@ class NightOwlAppTest {
     @Test
     fun t14_refreshDownloadsLiveDataAndSavesIt() {
         val before = vm.data.value.snapshotIso!!
+        val countBefore = vm.data.value.places.size
         compose.onNodeWithTag("refresh").performClick()
         compose.waitUntil(10_000) { vm.data.value.refreshing || vm.data.value.lastRefresh != null }
         compose.waitUntil(300_000) { !vm.data.value.refreshing && vm.data.value.lastRefresh != null }
@@ -358,6 +359,8 @@ class NightOwlAppTest {
         )
         assertTrue("data must never go back in time", data.snapshotIso!! >= before)
         assertTrue(data.places.size > 500)
+        // Same area as before: Kuala Lumpur itself, not the wider rectangle around it.
+        assertTrue("got ${data.places.size} places vs $countBefore before", data.places.size < countBefore * 1.3)
         screenshot("14_after_refresh")
 
         if (data.lastRefresh == RefreshOutcome.UPDATED) {
