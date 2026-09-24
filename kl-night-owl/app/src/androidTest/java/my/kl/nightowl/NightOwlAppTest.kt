@@ -11,6 +11,7 @@ import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -358,6 +359,7 @@ class NightOwlAppTest {
             data.lastRefresh == RefreshOutcome.UPDATED || data.lastRefresh == RefreshOutcome.ALREADY_UP_TO_DATE,
         )
         assertTrue("data must never go back in time", data.snapshotIso!! >= before)
+        compose.onNodeWithTag("search").assertIsNotFocused() // refreshing must not pop up the keyboard
         assertTrue(data.places.size > 500)
         // Same area as before: Kuala Lumpur itself, not the wider rectangle around it.
         assertTrue("got ${data.places.size} places vs $countBefore before", data.places.size < countBefore * 1.3)

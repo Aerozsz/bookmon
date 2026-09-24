@@ -160,10 +160,14 @@ fun NightOwlScreen(vm: NightOwlViewModel) {
                     }
                 },
                 actions = {
-                    if (data.refreshing) {
-                        CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(22.dp), strokeWidth = 2.dp)
-                    } else {
-                        IconButton(onClick = { vm.refresh() }, modifier = Modifier.testTag("refresh")) { Icon(Icons.Filled.Refresh, contentDescription = "Download the latest data") }
+                    // The button stays in place while refreshing (spinner inside it), so focus never
+                    // jumps to the search box and pops up the keyboard.
+                    IconButton(onClick = { vm.refresh() }, enabled = !data.refreshing, modifier = Modifier.testTag("refresh")) {
+                        if (data.refreshing) {
+                            CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Filled.Refresh, contentDescription = "Download the latest data")
+                        }
                     }
                     IconButton(onClick = { showAbout = true }, modifier = Modifier.testTag("about")) { Icon(Icons.Filled.Info, contentDescription = "About") }
                 },

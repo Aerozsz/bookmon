@@ -14,6 +14,8 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.time.Duration
+import java.time.Instant
 
 /**
  * Where the places come from:
@@ -87,6 +89,8 @@ class PlacesRepository(private val context: Context) {
                     val snapshot = result.snapshot
                     if (newerThan != null && snapshot != null && snapshot < newerThan) {
                         onlyOlderCopies = true
+                        // A copy a few days behind means ours is current enough: stop searching.
+                        if (daysBetween(snapshot, newerThan) <= CLOSE_ENOUGH_DAYS) break@servers
                         continue
                     }
                     val tmp = File(context.filesDir, "overpass_cache.tmp")
@@ -114,7 +118,7 @@ class PlacesRepository(private val context: Context) {
             conn.requestMethod = "POST"
             conn.doOutput = true
             conn.connectTimeout = 15_000
-            conn.readTimeout = 100_000
+            conn.readTimeout = 60_000
             conn.setRequestProperty("User-Agent", "KLNightOwl/${BuildConfig.VERSION_NAME} (Android app)")
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
             conn.outputStream.use { it.write(("data=" + URLEncoder.encode(query, "UTF-8")).toByteArray()) }
@@ -126,7 +130,12 @@ class PlacesRepository(private val context: Context) {
         }
     }
 
+    private fun daysBetween(olderIso: String, newerIso: String): Long = runCatching {
+        Duration.between(Instant.parse(olderIso), Instant.parse(newerIso)).toDays()
+    }.getOrDefault(Long.MAX_VALUE)
+
     companion object {
+        private const val CLOSE_ENOUGH_DAYS = 3L
         const val SEED_ASSET = "overpass_seed.json"
         const val QUERY_ASSET = "overpass_query.txt"
         private const val TAG = "NightOwlRepo"
