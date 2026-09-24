@@ -62,15 +62,11 @@ def fetch():
                     if n == 0 and data.get("remark"):
                         raise RuntimeError(data["remark"])
                     if n == 0:
-                        break  # boundary not found here: try the bounding box
+                        break  # this server can't resolve the boundary: try the next one
                     return data
                 except Exception as e:  # noqa: BLE001 - try the next server
                     print(f"  !! {e}", flush=True)
                     time.sleep(5)
-            else:
-                continue
-            if use_area:
-                break
     return None
 
 

@@ -61,8 +61,8 @@ class PlacesRepository(private val context: Context) {
         val template = context.assets.open(QUERY_ASSET).bufferedReader().use { it.readText() }
         var lastError: Exception? = null
         var onlyOlderCopies = false
-        // First ask for everything inside the Kuala Lumpur boundary; if a server can't resolve
-        // the boundary, fall back to a rectangle around the city.
+        // Ask every server for the places inside the Kuala Lumpur boundary first. Only if none of
+        // them can resolve the boundary, fall back to a rectangle around the city.
         for (useArea in listOf(true, false)) {
             val query = OverpassQuery.build(template, useArea)
             for (endpoint in OverpassQuery.ENDPOINTS) {
@@ -70,7 +70,7 @@ class PlacesRepository(private val context: Context) {
                     val body = post(endpoint, query)
                     val result = OsmParser.parse(body)
                     if (result.remark != null && result.elementCount == 0) throw IOException(result.remark)
-                    if (result.elementCount == 0) break
+                    if (result.elementCount == 0) continue // this server can't resolve the boundary
                     if (result.places.isEmpty()) throw IOException("No night places in response")
                     val snapshot = result.snapshot
                     if (newerThan != null && snapshot != null && snapshot < newerThan) {
