@@ -94,12 +94,14 @@ def slim(data):
     }
 
 
-def snapshot_age_days(path):
+def parse_ts(ts):
+    return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def existing_snapshot(path):
     try:
         with open(path, encoding="utf-8") as f:
-            ts = json.load(f)["osm3s"]["timestamp_osm_base"]
-        made = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        return (datetime.datetime.now(datetime.timezone.utc) - made).days
+            return parse_ts(json.load(f)["osm3s"]["timestamp_osm_base"])
     except Exception:  # noqa: BLE001
         return None
 
@@ -113,7 +115,8 @@ def set_output(name, value):
 
 def main():
     out_path = sys.argv[1]
-    age = snapshot_age_days(out_path)
+    previous = existing_snapshot(out_path)
+    age = (datetime.datetime.now(datetime.timezone.utc) - previous).days if previous else None
     data = fetch()
     if data is None:
         print("::warning::Could not download fresh OpenStreetMap data; the app keeps the committed snapshot.")
@@ -121,6 +124,13 @@ def main():
         set_output("commit", "false")
         return
     slimmed = slim(data)
+    fetched_ts = slimmed["osm3s"]["timestamp_osm_base"]
+    if previous and fetched_ts and parse_ts(fetched_ts) <= previous:
+        # Mirrors can lag behind; never swap in older data than what we already have.
+        print(f"Server snapshot {fetched_ts} is not newer than the committed one ({previous}); keeping it.")
+        set_output("fresh", "false")
+        set_output("commit", "false")
+        return
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(slimmed, f, ensure_ascii=False, separators=(",", ":"))
     print(f"Wrote {len(slimmed['elements'])} elements ({os.path.getsize(out_path) // 1024} KB), "
