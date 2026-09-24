@@ -65,9 +65,8 @@ class PlacesRepository(private val context: Context) {
         var lastError: Exception? = null
         var onlyOlderCopies = false
         val deadline = System.currentTimeMillis() + REFRESH_BUDGET_MS
-        // Ask every server for the places inside the Kuala Lumpur boundary first. Only if none of
-        // them can resolve the boundary, fall back to a rectangle around the city.
-        servers@ for (useArea in listOf(true, false)) {
+        // Only places inside the Kuala Lumpur boundary. If every server is busy, keep the current data.
+        servers@ for (useArea in listOf(true)) {
             val query = OverpassQuery.build(template, useArea)
             for (endpoint in OverpassQuery.ENDPOINTS) {
                 if (System.currentTimeMillis() > deadline) {

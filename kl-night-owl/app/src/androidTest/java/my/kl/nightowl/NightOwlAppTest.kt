@@ -12,7 +12,9 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
-import androidx.compose.ui.test.assertIsNotFocused
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -181,6 +183,9 @@ class NightOwlAppTest {
 
     @Test
     fun t04_search() {
+        compose.onNodeWithTag("search").assertDoesNotExist() // a plain button until tapped
+        compose.onNodeWithTag("search_button").performClick()
+        compose.onNodeWithTag("search").assertIsFocused()
         compose.onNodeWithTag("search").performTextInput("McDonald")
         compose.waitUntil(10_000) {
             val shown = vm.visible.value
@@ -366,7 +371,6 @@ class NightOwlAppTest {
         val countBefore = vm.data.value.places.size
         // The public OpenStreetMap servers are sometimes all overloaded for a minute; the app then
         // keeps its data and says so. Allow a few tries, checking that behaviour each time.
-        val searchFocusedBefore = runCatching { compose.onNodeWithTag("search").assertIsFocused() }.isSuccess
         var data = vm.data.value
         for (attempt in 1..3) {
             compose.onNodeWithTag("refresh").performClick()
@@ -385,8 +389,8 @@ class NightOwlAppTest {
             data.lastRefresh == RefreshOutcome.UPDATED || data.lastRefresh == RefreshOutcome.ALREADY_UP_TO_DATE,
         )
         assertTrue("data must never go back in time", data.snapshotIso!! >= before)
-        // Refreshing must not move focus to the search box (which would pop up the keyboard).
-        if (!searchFocusedBefore) compose.onNodeWithTag("search").assertIsNotFocused()
+        // No text box may take focus on its own (that would pop up the keyboard).
+        compose.onAllNodes(isFocused() and hasSetTextAction()).assertCountEquals(0)
         assertTrue(data.places.size > 500)
         // Same area as before: Kuala Lumpur itself, not the wider rectangle around it.
         assertTrue("got ${data.places.size} places vs $countBefore before", data.places.size < countBefore * 1.3)

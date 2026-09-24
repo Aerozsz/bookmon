@@ -50,7 +50,7 @@ def post(endpoint, query):
 
 
 def fetch():
-    for use_area in (True, False):
+    for use_area in (True,):  # Kuala Lumpur boundary only
         query = build_query(use_area)
         for endpoint in ENDPOINTS:
             for attempt in range(2):

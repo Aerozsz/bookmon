@@ -3,6 +3,7 @@ package my.kl.nightowl.ui
 import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +51,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -65,6 +67,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -244,6 +249,7 @@ fun NightOwlScreen(vm: NightOwlViewModel) {
     if (showAbout) AboutDialog(data, onDismiss = { showAbout = false })
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FilterBar(
     filters: Filters,
@@ -251,18 +257,24 @@ private fun FilterBar(
     showSearch: Boolean,
     onChange: ((Filters) -> Filters) -> Unit,
 ) {
+    // Until tapped, the search bar is a plain button: Android can hand a text field focus on its own
+    // (for example when a screen opens or a system dialog closes), which would pop up the keyboard.
+    var searching by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
-        if (showSearch) {
+        if (showSearch && (searching || filters.query.isNotEmpty())) {
+            val focusRequester = remember { FocusRequester() }
+            var hadFocus by remember { mutableStateOf(false) }
             OutlinedTextField(
                 value = filters.query,
                 onValueChange = { q -> onChange { it.copy(query = q) } },
                 placeholder = { Text("Search a name, type or street") },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 trailingIcon = {
-                    if (filters.query.isNotEmpty()) {
-                        IconButton(onClick = { onChange { it.copy(query = "") } }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Clear search")
-                        }
+                    IconButton(onClick = {
+                        onChange { it.copy(query = "") }
+                        searching = false
+                    }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Close search")
                     }
                 },
                 singleLine = true,
@@ -270,8 +282,37 @@ private fun FilterBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { state ->
+                        if (state.isFocused) {
+                            hadFocus = true
+                        } else if (hadFocus && filters.query.isEmpty()) {
+                            searching = false
+                        }
+                    }
                     .testTag("search"),
             )
+            LaunchedEffect(Unit) {
+                if (searching) focusRequester.requestFocus()
+            }
+        } else if (showSearch) {
+            Surface(
+                onClick = { searching = true },
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.background,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .height(56.dp)
+                    .testTag("search_button"),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp)) {
+                    Icon(Icons.Filled.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(14.dp))
+                    Text("Search a name, type or street", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
         LazyRow(
             modifier = Modifier.testTag("category_row"),
