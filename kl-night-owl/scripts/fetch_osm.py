@@ -21,8 +21,8 @@ TEMPLATE = os.path.join(HERE, "..", "app", "src", "main", "assets", "overpass_qu
 ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ]
 KL_AREA = 'area["ISO3166-2"="MY-14"]->.kl;'
 KL_BBOX = "(3.03,101.60,3.26,101.77)"

@@ -45,6 +45,7 @@ import my.kl.nightowl.core.NIGHT_END_MINUTE
 import my.kl.nightowl.core.Place
 import my.kl.nightowl.data.PlacesRepository
 import my.kl.nightowl.ui.NightOwlViewModel
+import my.kl.nightowl.ui.RefreshOutcome
 import my.kl.nightowl.ui.SortMode
 import my.kl.nightowl.ui.formatDistance
 import my.kl.nightowl.ui.map.PlacesOverlay
@@ -345,17 +346,25 @@ class NightOwlAppTest {
 
     @Test
     fun t14_refreshDownloadsLiveDataAndSavesIt() {
+        val before = vm.data.value.snapshotIso!!
         compose.onNodeWithTag("refresh").performClick()
-        compose.waitUntil(10_000) { vm.data.value.refreshing || vm.data.value.source == PlacesRepository.Source.LIVE }
-        compose.waitUntil(300_000) { !vm.data.value.refreshing }
+        compose.waitUntil(10_000) { vm.data.value.refreshing || vm.data.value.lastRefresh != null }
+        compose.waitUntil(300_000) { !vm.data.value.refreshing && vm.data.value.lastRefresh != null }
         val data = vm.data.value
-        log("refresh: source=${data.source}, places=${data.places.size}, snapshot=${data.snapshotIso}, message=${data.message}")
-        assertEquals("live download should succeed", PlacesRepository.Source.LIVE, data.source)
+        log("refresh: outcome=${data.lastRefresh}, source=${data.source}, places=${data.places.size}, snapshot $before -> ${data.snapshotIso}")
+        assertTrue(
+            "download should succeed (new data, or servers confirm nothing newer)",
+            data.lastRefresh == RefreshOutcome.UPDATED || data.lastRefresh == RefreshOutcome.ALREADY_UP_TO_DATE,
+        )
+        assertTrue("data must never go back in time", data.snapshotIso!! >= before)
         assertTrue(data.places.size > 500)
         screenshot("14_after_refresh")
 
-        val saved = runBlocking { PlacesRepository(instrumentation.targetContext).loadOffline() }
-        assertEquals(PlacesRepository.Source.SAVED, saved?.source)
+        if (data.lastRefresh == RefreshOutcome.UPDATED) {
+            assertEquals(PlacesRepository.Source.LIVE, data.source)
+            val saved = runBlocking { PlacesRepository(instrumentation.targetContext).loadOffline() }
+            assertEquals("the download is kept for next time", data.snapshotIso, saved?.snapshotIso)
+        }
     }
 
     @Test
@@ -363,7 +372,8 @@ class NightOwlAppTest {
         compose.onNodeWithTag("place_list").performTouchInput { swipeDown(startY = top + 20f, endY = bottom, durationMillis = 800) }
         compose.waitUntil(10_000) { vm.data.value.refreshing }
         compose.waitUntil(300_000) { !vm.data.value.refreshing }
-        log("pull-to-refresh finished: source=${vm.data.value.source}")
+        log("pull-to-refresh finished: outcome=${vm.data.value.lastRefresh}, snapshot=${vm.data.value.snapshotIso}")
+        assertTrue(vm.data.value.lastRefresh != RefreshOutcome.FAILED)
     }
 
     @Test

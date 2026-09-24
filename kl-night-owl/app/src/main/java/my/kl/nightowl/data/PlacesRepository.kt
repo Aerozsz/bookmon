@@ -35,7 +35,10 @@ class PlacesRepository(private val context: Context) {
 
     private val cacheFile get() = File(context.filesDir, "overpass_cache.json")
 
-    suspend fun loadOffline(): Snapshot? = withContext(Dispatchers.IO) { readSaved() ?: readBundled() }
+    /** The newer of the saved download and the bundled snapshot (an app update may bring newer data). */
+    suspend fun loadOffline(): Snapshot? = withContext(Dispatchers.IO) {
+        listOfNotNull(readSaved(), readBundled()).maxByOrNull { it.snapshotIso.orEmpty() }
+    }
 
     private fun readSaved(): Snapshot? = runCatching {
         val file = cacheFile
@@ -50,9 +53,14 @@ class PlacesRepository(private val context: Context) {
         if (result.places.isEmpty()) null else Snapshot(result.places, result.snapshot, Source.BUNDLED, 0L)
     }.getOrNull()
 
-    suspend fun refresh(): Snapshot = withContext(Dispatchers.IO) {
+    /**
+     * Downloads the latest data. Mirrors can lag behind by weeks, so a copy older than [newerThan]
+     * (the snapshot already shown) is skipped. Returns null when no server has anything newer.
+     */
+    suspend fun refresh(newerThan: String? = null): Snapshot? = withContext(Dispatchers.IO) {
         val template = context.assets.open(QUERY_ASSET).bufferedReader().use { it.readText() }
         var lastError: Exception? = null
+        var onlyOlderCopies = false
         // First ask for everything inside the Kuala Lumpur boundary; if a server can't resolve
         // the boundary, fall back to a rectangle around the city.
         for (useArea in listOf(true, false)) {
@@ -64,6 +72,11 @@ class PlacesRepository(private val context: Context) {
                     if (result.remark != null && result.elementCount == 0) throw IOException(result.remark)
                     if (result.elementCount == 0) break
                     if (result.places.isEmpty()) throw IOException("No night places in response")
+                    val snapshot = result.snapshot
+                    if (newerThan != null && snapshot != null && snapshot < newerThan) {
+                        onlyOlderCopies = true
+                        continue
+                    }
                     val tmp = File(context.filesDir, "overpass_cache.tmp")
                     tmp.writeText(body)
                     if (!tmp.renameTo(cacheFile)) {
@@ -78,6 +91,7 @@ class PlacesRepository(private val context: Context) {
                 }
             }
         }
+        if (onlyOlderCopies) return@withContext null
         throw IOException("Couldn't download data from OpenStreetMap", lastError)
     }
 

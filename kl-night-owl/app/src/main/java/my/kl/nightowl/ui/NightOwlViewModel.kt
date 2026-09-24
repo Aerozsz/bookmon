@@ -66,6 +66,8 @@ data class Filters(
     val sort: SortMode = SortMode.NEAREST,
 )
 
+enum class RefreshOutcome { UPDATED, ALREADY_UP_TO_DATE, FAILED }
+
 data class DataState(
     val places: List<Place> = emptyList(),
     val snapshotIso: String? = null,
@@ -73,6 +75,7 @@ data class DataState(
     val loading: Boolean = true,
     val refreshing: Boolean = false,
     val message: String? = null,
+    val lastRefresh: RefreshOutcome? = null,
 )
 
 /** Asks a map to fly to a place. [nonce] makes repeated requests for the same place distinct. */
@@ -152,9 +155,24 @@ class NightOwlViewModel(app: Application) : AndroidViewModel(app) {
         _data.update { it.copy(refreshing = true, message = null) }
         viewModelScope.launch {
             try {
-                val snapshot = repository.refresh()
-                _data.value = DataState(snapshot.places, snapshot.snapshotIso, snapshot.source, loading = false)
-                if (userAsked) _data.update { it.copy(message = "Updated: ${snapshot.places.size} night spots") }
+                val snapshot = repository.refresh(newerThan = _data.value.snapshotIso)
+                if (snapshot == null) {
+                    _data.update {
+                        it.copy(
+                            loading = false,
+                            refreshing = false,
+                            lastRefresh = RefreshOutcome.ALREADY_UP_TO_DATE,
+                            message = if (userAsked) "Already up to date" else null,
+                        )
+                    }
+                } else {
+                    _data.value = DataState(
+                        snapshot.places, snapshot.snapshotIso, snapshot.source,
+                        loading = false,
+                        lastRefresh = RefreshOutcome.UPDATED,
+                        message = if (userAsked) "Updated: ${snapshot.places.size} night spots" else null,
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -162,6 +180,7 @@ class NightOwlViewModel(app: Application) : AndroidViewModel(app) {
                     it.copy(
                         loading = false,
                         refreshing = false,
+                        lastRefresh = RefreshOutcome.FAILED,
                         message = if (userAsked || it.places.isEmpty()) {
                             "Couldn't reach OpenStreetMap. Check your internet connection and try again."
                         } else null,
