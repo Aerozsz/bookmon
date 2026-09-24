@@ -6,6 +6,7 @@ import android.graphics.Point
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.view.MotionEvent
+import androidx.annotation.VisibleForTesting
 import my.kl.nightowl.ui.PlaceUi
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -173,6 +174,10 @@ class PlacesOverlay(
         canvas.drawCircle(x, y, 7f * density, userFill)
         canvas.drawCircle(x, y, 7f * density, userRing)
     }
+
+    /** View coordinates of the numbered group bubbles drawn in the last frame. */
+    @VisibleForTesting
+    fun groupPositions(): List<Pair<Float, Float>> = drawn.filter { it.placeId == null }.map { it.x to it.y }
 
     override fun onSingleTapConfirmed(e: MotionEvent, mapView: MapView): Boolean {
         val hit = drawn

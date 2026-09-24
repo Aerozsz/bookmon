@@ -44,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,7 +89,9 @@ fun PlaceList(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("place_list"),
                 contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -135,7 +138,9 @@ fun PlaceCard(
     val context = LocalContext.current
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("place_card"),
     ) {
         Column(
             Modifier
@@ -239,13 +244,13 @@ fun PlaceCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.weight(1f))
-                OutlinedButton(onClick = onShowOnMap, contentPadding = PaddingValues(horizontal = 12.dp)) {
+                OutlinedButton(onClick = onShowOnMap, contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.testTag("map_button")) {
                     Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Map")
                 }
                 Spacer(Modifier.width(8.dp))
-                Button(onClick = onDirections, contentPadding = PaddingValues(horizontal = 14.dp)) {
+                Button(onClick = onDirections, contentPadding = PaddingValues(horizontal = 14.dp), modifier = Modifier.testTag("go_button")) {
                     Icon(Icons.Filled.Directions, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Go")

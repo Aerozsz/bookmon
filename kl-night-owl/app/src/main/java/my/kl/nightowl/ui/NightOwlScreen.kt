@@ -63,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -159,9 +160,9 @@ fun NightOwlScreen(vm: NightOwlViewModel) {
                     if (data.refreshing) {
                         CircularProgressIndicator(modifier = Modifier.padding(12.dp).size(22.dp), strokeWidth = 2.dp)
                     } else {
-                        IconButton(onClick = { vm.refresh() }) { Icon(Icons.Filled.Refresh, contentDescription = "Download the latest data") }
+                        IconButton(onClick = { vm.refresh() }, modifier = Modifier.testTag("refresh")) { Icon(Icons.Filled.Refresh, contentDescription = "Download the latest data") }
                     }
-                    IconButton(onClick = { showAbout = true }) { Icon(Icons.Filled.Info, contentDescription = "About") }
+                    IconButton(onClick = { showAbout = true }, modifier = Modifier.testTag("about")) { Icon(Icons.Filled.Info, contentDescription = "About") }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
@@ -171,12 +172,14 @@ fun NightOwlScreen(vm: NightOwlViewModel) {
                 NavigationBarItem(
                     selected = tab == TAB_LIST,
                     onClick = { tab = TAB_LIST },
+                    modifier = Modifier.testTag("tab_list"),
                     icon = { Icon(Icons.Filled.List, contentDescription = null) },
                     label = { Text("List") },
                 )
                 NavigationBarItem(
                     selected = tab == TAB_MAP,
                     onClick = { tab = TAB_MAP },
+                    modifier = Modifier.testTag("tab_map"),
                     icon = { Icon(Icons.Filled.Map, contentDescription = null) },
                     label = { Text("Map") },
                 )
@@ -256,10 +259,12 @@ private fun FilterBar(
                 shape = RoundedCornerShape(28.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .testTag("search"),
             )
         }
         LazyRow(
+            modifier = Modifier.testTag("category_row"),
             contentPadding = PaddingValues(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -267,6 +272,7 @@ private fun FilterBar(
                 FilterChip(
                     selected = filters.category == null,
                     onClick = { onChange { it.copy(category = null) } },
+                    modifier = Modifier.testTag("chip_ALL"),
                     label = { Text("🌙 All  ${counts[null] ?: 0}") },
                 )
             }
@@ -275,6 +281,7 @@ private fun FilterBar(
                 FilterChip(
                     selected = filters.category == category,
                     onClick = { onChange { it.copy(category = if (it.category == category) null else category) } },
+                    modifier = Modifier.testTag("chip_${category.name}"),
                     label = { Text("${category.emoji} ${category.shortLabel}  ${counts[category] ?: 0}") },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = category.color.copy(alpha = 0.25f),
@@ -291,6 +298,7 @@ private fun FilterBar(
             FilterChip(
                 selected = filters.openNow,
                 onClick = { onChange { it.copy(openNow = !it.openNow) } },
+                modifier = Modifier.testTag("open_now"),
                 label = { Text("Open now") },
                 leadingIcon = if (filters.openNow) {
                     { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
@@ -299,6 +307,7 @@ private fun FilterBar(
             FilterChip(
                 selected = filters.allNight,
                 onClick = { onChange { it.copy(allNight = !it.allNight) } },
+                modifier = Modifier.testTag("all_night"),
                 label = { Text("All night") },
                 leadingIcon = if (filters.allNight) {
                     { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
@@ -316,6 +325,7 @@ private fun SortMenu(current: SortMode, onPick: (SortMode) -> Unit) {
     Box {
         AssistChip(
             onClick = { open = true },
+            modifier = Modifier.testTag("sort"),
             label = { Text(current.label) },
             leadingIcon = { Icon(Icons.Filled.SwapVert, contentDescription = null, modifier = Modifier.size(16.dp)) },
         )

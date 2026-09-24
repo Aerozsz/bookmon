@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -113,6 +114,7 @@ fun MapTab(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             SmallFloatingActionButton(
+                modifier = Modifier.testTag("map_style"),
                 onClick = {
                     darkMap = !darkMap
                     vm.prefs.darkMap = darkMap
@@ -120,6 +122,7 @@ fun MapTab(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             ) { Icon(Icons.Filled.Layers, contentDescription = "Switch map style") }
             SmallFloatingActionButton(
+                modifier = Modifier.testTag("my_location"),
                 onClick = {
                     when {
                         !hasLocationPermission -> onRequestLocation()
@@ -163,7 +166,8 @@ private fun SelectedPlaceCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp),
+            .padding(12.dp)
+            .testTag("selected_card"),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
@@ -188,7 +192,7 @@ private fun SelectedPlaceCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onClose, modifier = Modifier.size(32.dp).testTag("close_selected")) {
                     Icon(Icons.Filled.Close, contentDescription = "Close")
                 }
             }
@@ -233,12 +237,13 @@ private fun SelectedPlaceCard(
                     FilterChip(
                         selected = mode == travelMode,
                         onClick = { onTravelMode(mode) },
+                        modifier = Modifier.testTag("travel_${mode.name}"),
                         label = { Text(mode.label) },
                     )
                 }
             }
             Spacer(Modifier.height(6.dp))
-            Button(onClick = onDirections, modifier = Modifier.fillMaxWidth().height(50.dp)) {
+            Button(onClick = onDirections, modifier = Modifier.fillMaxWidth().height(50.dp).testTag("start_route")) {
                 Icon(Icons.Filled.Directions, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Start route in Google Maps", fontWeight = FontWeight.SemiBold)

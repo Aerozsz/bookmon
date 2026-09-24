@@ -21,6 +21,8 @@ jobs:
     defaults:
       run:
         working-directory: kl-night-owl
+    outputs:
+      version: ${{ steps.version.outputs.name }}
 
     steps:
       - uses: actions/checkout@v4
@@ -49,44 +51,24 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app:testReleaseUnitTest
 
-      - name: Build signed APK
+      - name: Build release APK and on-device test APKs
         env:
           # Optional repository secret. Without it the in-app map uses OpenStreetMap tiles.
           MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
         run: |
-          ./gradlew --no-daemon --stacktrace :app:assembleRelease
-          cp app/build/outputs/apk/release/app-release.apk "KL-Night-Owl-${{ steps.version.outputs.name }}.apk"
-          ls -la KL-Night-Owl-*.apk
+          ./gradlew --no-daemon --stacktrace :app:assembleRelease :app:assembleDebug :app:assembleDebugAndroidTest
+          mkdir -p apks
+          cp app/build/outputs/apk/release/app-release.apk "apks/KL-Night-Owl-${{ steps.version.outputs.name }}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk apks/
+          cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk apks/
+          ls -la apks
 
-      - name: Upload APK as build artifact
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: KL-Night-Owl-apk
-          path: kl-night-owl/KL-Night-Owl-*.apk
+          name: kl-night-owl-apks
+          path: kl-night-owl/apks/
           if-no-files-found: error
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: kl-night-owl-v${{ steps.version.outputs.name }}
-          target_commitish: ${{ github.sha }}
-          name: KL Night Owl ${{ steps.version.outputs.name }} (Android)
-          make_latest: false
-          body: |
-            ## 🦉 KL Night Owl ${{ steps.version.outputs.name }}
-
-            Every shop, restaurant, konbini, mamak, petrol station shop, pharmacy and bar in
-            Kuala Lumpur that is open at some point between **midnight and 6 AM**, from
-            OpenStreetMap. List view by category with opening/closing hours, and an interactive
-            map: tap a place, then **Start route in Google Maps**.
-
-            ### Install on your Android phone
-            1. On your phone, tap **KL-Night-Owl-${{ steps.version.outputs.name }}.apk** below to download it.
-            2. Open the downloaded file. If Android asks, allow your browser to **install unknown apps**.
-            3. Tap **Install**, then **Open**. Allow location if you want places sorted by distance.
-
-            Newer versions install over the old one (same signing key).
-          files: kl-night-owl/KL-Night-Owl-*.apk
 
       - name: Save refreshed data snapshot to the branch
         if: github.event_name == 'push' && steps.data.outputs.commit == 'true'
@@ -95,5 +77,142 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/src/main/assets/overpass_seed.json
-          git commit -m "KL Night Owl: refresh bundled OpenStreetMap snapshot" || exit 0
+          git commit -m "KL Night Owl: refresh bundled OpenStreetMap snapshot [skip ci]" || exit 0
           git push origin "HEAD:${GITHUB_REF_NAME}"
+
+  # Installs the app on real Android emulators and drives every feature (see
+  # app/src/androidTest and scripts/emulator_tests.sh). Oldest supported and newest targeted Android.
+  emulator-test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [ 26, 35 ]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: kl-night-owl-apks
+          path: kl-night-owl/apks
+
+      - name: Enable hardware acceleration for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Test on Android emulator (API ${{ matrix.api-level }})
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash kl-night-owl/scripts/emulator_tests.sh ${{ matrix.api-level }}
+
+      - name: Upload screenshots and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-results-api${{ matrix.api-level }}
+          path: |
+            kl-night-owl/emulator-results/**/*.jpg
+            kl-night-owl/emulator-results/**/*.png
+            kl-night-owl/emulator-results/**/*-summary.txt
+          if-no-files-found: warn
+
+  # Screenshots and summaries of every test run, pass or fail, for review.
+  test-report:
+    needs: [ build, emulator-test ]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download emulator results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: emulator-results-api*
+          path: results
+          merge-multiple: true
+
+      - name: Publish test results
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kl-night-owl-test-results
+          target_commitish: ${{ github.sha }}
+          name: "KL Night Owl: automated test results (not an app download)"
+          prerelease: true
+          make_latest: false
+          body: |
+            Screenshots and logs from the automated tests of KL Night Owl ${{ needs.build.outputs.version }}
+            on Android 8 (API 26) and Android 15 (API 35) emulators, commit ${{ github.sha }}.
+            Emulator tests: **${{ needs.emulator-test.result }}**.
+
+            This is not an app release. The app itself is in the "KL Night Owl x.y.z (Android)" releases.
+          files: |
+            results/**/*.jpg
+            results/**/*.png
+            results/**/*-summary.txt
+
+  # The app is only published when it passed on both emulators.
+  publish:
+    needs: [ build, emulator-test ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: kl-night-owl-apks
+          path: apks
+
+      - name: Download Android 15 screenshots
+        uses: actions/download-artifact@v4
+        with:
+          name: emulator-results-api35
+          path: shots
+
+      - name: Pick screenshots for the release page
+        run: |
+          mkdir -p release-shots
+          for s in 01_list 06_card_expanded 09_marker_tapped 10_map_groups; do
+            f=$(find shots -name "api35_${s}.jpg" | head -1)
+            [ -n "$f" ] && cp "$f" "release-shots/screenshot-${s#*_}.jpg"
+          done
+          ls -la apks release-shots
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kl-night-owl-v${{ needs.build.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: KL Night Owl ${{ needs.build.outputs.version }} (Android)
+          make_latest: false
+          body: |
+            ## 🦉 KL Night Owl ${{ needs.build.outputs.version }}
+
+            Every shop, restaurant, konbini, mamak, petrol station shop and bar in Kuala Lumpur
+            that is open at some point between **midnight and 6 AM**, from OpenStreetMap.
+            List view by category with opening/closing hours, and an interactive map: tap a
+            place, then **Start route in Google Maps**.
+
+            ✅ Tested automatically on Android 8 and Android 15 emulators before publishing:
+            the list, every category filter, search, sorting, weekly schedules, the Google Maps
+            route buttons, map markers and group bubbles, map styles, your location, live data
+            download, and this exact APK installing and running.
+
+            ### Install on your Android phone
+            1. On your phone, tap **KL-Night-Owl-${{ needs.build.outputs.version }}.apk** below to download it.
+            2. Open the downloaded file. If Android asks, allow your browser to **install unknown apps**.
+            3. Tap **Install**, then **Open**. Allow location if you want places sorted by distance.
+
+            Newer versions install over the old one (same signing key).
+          files: |
+            apks/KL-Night-Owl-*.apk
+            release-shots/*.jpg
