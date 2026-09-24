@@ -93,6 +93,7 @@ def check(ok, message):
         failures.append(message)
 
 
+adb("shell", "am", "broadcast", "-a", "android.intent.action.CLOSE_SYSTEM_DIALOGS")
 adb("shell", "am", "start", "-W", "-n", f"{PKG}/.MainActivity")
 
 # 1. First launch asks for location.

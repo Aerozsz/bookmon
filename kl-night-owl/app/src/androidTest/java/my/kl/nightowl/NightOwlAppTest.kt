@@ -10,6 +10,8 @@ import android.os.Build
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrElseNullable
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.hasAnyAncestor
@@ -365,6 +367,8 @@ class NightOwlAppTest {
         val countBefore = vm.data.value.places.size
         // The public OpenStreetMap servers are sometimes all overloaded for a minute; the app then
         // keeps its data and says so. Allow a few tries, checking that behaviour each time.
+        val searchFocusedBefore = compose.onNodeWithTag("search").fetchSemanticsNode()
+            .config.getOrElseNullable(SemanticsProperties.Focused) { false } == true
         var data = vm.data.value
         for (attempt in 1..3) {
             compose.onNodeWithTag("refresh").performClick()
@@ -383,7 +387,8 @@ class NightOwlAppTest {
             data.lastRefresh == RefreshOutcome.UPDATED || data.lastRefresh == RefreshOutcome.ALREADY_UP_TO_DATE,
         )
         assertTrue("data must never go back in time", data.snapshotIso!! >= before)
-        compose.onNodeWithTag("search").assertIsNotFocused() // refreshing must not pop up the keyboard
+        // Refreshing must not move focus to the search box (which would pop up the keyboard).
+        if (!searchFocusedBefore) compose.onNodeWithTag("search").assertIsNotFocused()
         assertTrue(data.places.size > 500)
         // Same area as before: Kuala Lumpur itself, not the wider rectangle around it.
         assertTrue("got ${data.places.size} places vs $countBefore before", data.places.size < countBefore * 1.3)

@@ -17,6 +17,15 @@ log() { echo "$@" | tee -a "$SUMMARY"; }
 
 log "== KL Night Owl on Android API $API ($(adb shell getprop ro.build.version.release | tr -d '\r'))"
 
+# CI emulators are slow right after boot and their home-screen app can freeze behind an
+# "isn't responding" dialog that covers everything. Tests don't need it: hide such dialogs,
+# switch the launcher off and let boot-time work settle.
+adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1 || true
+adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher >/dev/null 2>&1 || true
+adb shell pm disable-user --user 0 com.android.launcher3 >/dev/null 2>&1 || true
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
+sleep 20
+
 # Location on, emulator placed in central Kuala Lumpur (geo fix takes longitude first).
 adb shell settings put secure location_mode 3 >/dev/null 2>&1 || true
 adb shell cmd location set-location-enabled true >/dev/null 2>&1 || true
