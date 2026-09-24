@@ -1,0 +1,99 @@
+name: Build KL Night Owl (Android)
+
+on:
+  push:
+    branches: [ "claude/kl-night-shops-app-uju1uz" ]
+    paths:
+      - "kl-night-owl/**"
+      - ".github/workflows/kl-night-owl.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: kl-night-owl-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kl-night-owl
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Read app version
+        id: version
+        run: |
+          source version.properties
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Download fresh OpenStreetMap data for Kuala Lumpur
+        id: data
+        run: python3 scripts/fetch_osm.py app/src/main/assets/overpass_seed.json
+
+      - name: Unit tests and data report
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :app:testReleaseUnitTest
+
+      - name: Build signed APK
+        env:
+          # Optional repository secret. Without it the in-app map uses OpenStreetMap tiles.
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
+        run: |
+          ./gradlew --no-daemon --stacktrace :app:assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "KL-Night-Owl-${{ steps.version.outputs.name }}.apk"
+          ls -la KL-Night-Owl-*.apk
+
+      - name: Upload APK as build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KL-Night-Owl-apk
+          path: kl-night-owl/KL-Night-Owl-*.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kl-night-owl-v${{ steps.version.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          name: KL Night Owl ${{ steps.version.outputs.name }} (Android)
+          make_latest: false
+          body: |
+            ## 🦉 KL Night Owl ${{ steps.version.outputs.name }}
+
+            Every shop, restaurant, konbini, mamak, petrol station shop, pharmacy and bar in
+            Kuala Lumpur that is open at some point between **midnight and 6 AM**, from
+            OpenStreetMap. List view by category with opening/closing hours, and an interactive
+            map: tap a place, then **Start route in Google Maps**.
+
+            ### Install on your Android phone
+            1. On your phone, tap **KL-Night-Owl-${{ steps.version.outputs.name }}.apk** below to download it.
+            2. Open the downloaded file. If Android asks, allow your browser to **install unknown apps**.
+            3. Tap **Install**, then **Open**. Allow location if you want places sorted by distance.
+
+            Newer versions install over the old one (same signing key).
+          files: kl-night-owl/KL-Night-Owl-*.apk
+
+      - name: Save refreshed data snapshot to the branch
+        if: github.event_name == 'push' && steps.data.outputs.commit == 'true'
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/overpass_seed.json
+          git commit -m "KL Night Owl: refresh bundled OpenStreetMap snapshot" || exit 0
+          git push origin "HEAD:${GITHUB_REF_NAME}"

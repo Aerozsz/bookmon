@@ -1,0 +1,10 @@
+[out:json][timeout:180];
+{{AREA}}
+(
+  nwr["shop"]["opening_hours"]{{SCOPE}};
+  nwr["shop"="convenience"]{{SCOPE}};
+  nwr["amenity"~"^(restaurant|fast_food|cafe|food_court|bar|pub|nightclub|biergarten|pharmacy|ice_cream|internet_cafe)$"]["opening_hours"]{{SCOPE}};
+  nwr["amenity"="fuel"]{{SCOPE}};
+  nwr["amenity"~"^(restaurant|fast_food|food_court|cafe)$"]["name"~"pelita|ali maju|kudu",i]{{SCOPE}};
+);
+out center tags qt;

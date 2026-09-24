@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Crescent moon over the Petronas Twin Towers. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFC857"
+        android:pathData="M75.11,44.54 A12,12 0 1,1 62.01,28.16 A10.5,10.5 0 0,0 75.11,44.54 Z" />
+    <path
+        android:fillColor="#FF8FA8FF"
+        android:pathData="M39.5,80 L39.5,62 L41,59 L42.2,58 L43,50 L43.8,58 L45,59 L46.5,62 L46.5,80 Z" />
+    <path
+        android:fillColor="#FF8FA8FF"
+        android:pathData="M51.5,80 L51.5,62 L53,59 L54.2,58 L55,50 L55.8,58 L57,59 L58.5,62 L58.5,80 Z" />
+    <path
+        android:fillColor="#FF8FA8FF"
+        android:pathData="M46.5,67 L51.5,67 L51.5,68.5 L46.5,68.5 Z" />
+    <path
+        android:fillColor="#FFFFF3C4"
+        android:pathData="M30,39 L31.2,42.8 L35,44 L31.2,45.2 L30,49 L28.8,45.2 L25,44 L28.8,42.8 Z" />
+    <path
+        android:fillColor="#FFFFF3C4"
+        android:pathData="M78,56 L78.8,58.2 L81,59 L78.8,59.8 L78,62 L77.2,59.8 L75,59 L77.2,58.2 Z" />
+</vector>
