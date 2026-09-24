@@ -41,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -74,7 +75,11 @@ fun MapTab(
     val lastSelected = remember { arrayOfNulls<PlaceUi>(1) }
     if (selected != null) lastSelected[0] = selected
 
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clipToBounds(),
+    ) {
         if (USES_GOOGLE_MAP_TILES) {
             GoogleNightMap(
                 places = places,
@@ -213,7 +218,7 @@ private fun SelectedPlaceCard(
                     Text(it, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
                 }
             }
-            if (!ui.place.schedule.isAlwaysOpen) {
+            if (!ui.place.schedule.isAlwaysOpen && ui.statusText != ui.tonightText) {
                 Text(
                     ui.statusText,
                     style = MaterialTheme.typography.bodySmall,

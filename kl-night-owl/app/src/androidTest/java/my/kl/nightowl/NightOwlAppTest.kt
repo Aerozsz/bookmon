@@ -20,6 +20,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToLog
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
@@ -54,6 +56,10 @@ import org.junit.Before
 import org.junit.FixMethodOrder
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
+import org.junit.rules.TestWatcher
+import org.junit.runner.Description
 import org.junit.runner.RunWith
 import org.junit.runners.MethodSorters
 import org.osmdroid.util.GeoPoint
@@ -70,8 +76,18 @@ import java.util.Locale
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 class NightOwlAppTest {
 
-    @get:Rule
     val compose = createAndroidComposeRule<MainActivity>()
+
+    /** On failure: a screenshot and the on-screen element tree, taken before the activity closes. */
+    private val onFailure = object : TestWatcher() {
+        override fun failed(e: Throwable?, description: Description) {
+            runCatching { screenshot("FAILED_${description.methodName}", waitForIdle = false) }
+            runCatching { compose.onRoot(useUnmergedTree = true).printToLog(TAG) }
+        }
+    }
+
+    @get:Rule
+    val rules: TestRule = RuleChain.outerRule(compose).around(onFailure)
 
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val device get() = UiDevice.getInstance(instrumentation)
@@ -226,6 +242,7 @@ class NightOwlAppTest {
         compose.onNodeWithText("Start route in Google Maps").assertIsDisplayed()
         compose.waitUntil(15_000) { mapCenterWithin(first.lat, first.lon, 60.0) }
         waitForTiles()
+        assertHeaderAndChipsVisible()
         screenshot("08_map_selected_from_list")
     }
 
@@ -246,6 +263,7 @@ class NightOwlAppTest {
         compose.waitUntil(10_000) { vm.selectedId.value == target.id }
         compose.onNodeWithTag("selected_card").assertIsDisplayed()
         compose.onNode(hasText(target.name) and hasAnyAncestor(hasTestTag("selected_card"))).assertIsDisplayed()
+        assertHeaderAndChipsVisible()
         screenshot("09_marker_tapped")
 
         withStubbedIntents {
@@ -266,6 +284,7 @@ class NightOwlAppTest {
         vm.focusOn(3.1466, 101.7101, 12.5) // Bukit Bintang: dense, so places are grouped
         compose.waitUntil(15_000) { mapCenterWithin(3.1466, 101.7101, 200.0) && mapZoom() in 12.0..13.0 }
         waitForTiles()
+        assertHeaderAndChipsVisible()
         screenshot("10_map_groups")
         val before = mapZoom()
         val bubble = compose.runOnUiThread {
@@ -284,17 +303,19 @@ class NightOwlAppTest {
     }
 
     @Test
-    fun t11_mapStyleToggleSwitchesTiles() {
+    fun t11_mapStyleToggleSwitchesBetweenNightAndStreet() {
         openMapTab()
-        val before = compose.runOnUiThread { mapView()!!.tileProvider.tileSource.name() }
+        val source = compose.runOnUiThread { mapView()!!.tileProvider.tileSource.name() }
+        assertEquals("OpenStreetMap tiles, no key needed", "Mapnik", source)
+        val before = mapStyle()
         compose.onNodeWithTag("map_style").performClick()
-        compose.waitUntil(10_000) { compose.runOnUiThread { mapView()!!.tileProvider.tileSource.name() } != before }
-        log("map style: $before -> ${compose.runOnUiThread { mapView()!!.tileProvider.tileSource.name() }}")
+        compose.waitUntil(10_000) { mapStyle() != before }
+        log("map style: $before -> ${mapStyle()}")
         waitForTiles()
-        Thread.sleep(4_000)
+        Thread.sleep(3_000)
         screenshot("11_map_other_style")
         compose.onNodeWithTag("map_style").performClick()
-        compose.waitUntil(10_000) { compose.runOnUiThread { mapView()!!.tileProvider.tileSource.name() } == before }
+        compose.waitUntil(10_000) { mapStyle() == before }
     }
 
     @Test
@@ -376,6 +397,21 @@ class NightOwlAppTest {
         return null
     }
 
+    private fun mapStyle(): String = compose.runOnUiThread { mapView()?.contentDescription?.toString().orEmpty() }
+
+    /** The filter chips stay visible above the map and the header shows the full count. */
+    private fun assertHeaderAndChipsVisible() {
+        compose.onNodeWithText("${vm.data.value.places.size} spots open between midnight", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("chip_ALL").assertIsDisplayed()
+        compose.onNodeWithTag("open_now").assertIsDisplayed()
+        val chipsBottom = compose.onNodeWithTag("open_now").fetchSemanticsNode().boundsInWindow.bottom
+        val mapTop = compose.runOnUiThread {
+            val map = mapView()!!
+            IntArray(2).also { map.getLocationInWindow(it) }[1].toFloat()
+        }
+        assertTrue("map ($mapTop) must start below the filter chips ($chipsBottom)", mapTop >= chipsBottom - 1f)
+    }
+
     private fun mapZoom(): Double = compose.runOnUiThread { mapView()?.zoomLevelDouble ?: 0.0 }
 
     private fun mapCenterWithin(lat: Double, lon: Double, meters: Double): Boolean = compose.runOnUiThread {
@@ -418,8 +454,8 @@ class NightOwlAppTest {
         println("$TAG: $message")
     }
 
-    private fun screenshot(name: String) {
-        compose.waitForIdle()
+    private fun screenshot(name: String, waitForIdle: Boolean = true) {
+        if (waitForIdle) compose.waitForIdle()
         Thread.sleep(600)
         val shot = instrumentation.uiAutomation.takeScreenshot() ?: return
         val small = Bitmap.createScaledBitmap(shot, shot.width / 2, shot.height / 2, true)

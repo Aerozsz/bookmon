@@ -34,16 +34,20 @@ script both use it.
 
 ## Map tiles
 
-By default, the in-app map uses OpenStreetMap data with CARTO tiles, which need no account or
-key. To draw the in-app map with Google Maps instead, create a Maps SDK for Android key in
-Google Cloud and add it as a repository secret named `MAPS_API_KEY`. The next build will use it.
+By default, the in-app map uses OpenStreetMap's own map tiles, which need no account or key.
+The night style is the same tiles recoloured on the phone. To draw the in-app map with Google
+Maps instead, create a Maps SDK for Android key in Google Cloud and add it as a repository
+secret named `MAPS_API_KEY`. The next build will use it.
 Directions always open in the Google Maps app, with or without a key.
 
 ## Build
 
 GitHub Actions builds this app on every push that touches `kl-night-owl/`
-(`.github/workflows/kl-night-owl.yml`). The workflow runs the unit tests, builds a signed release
-APK and publishes it as a GitHub Release. To build it yourself, open `kl-night-owl/` in Android
+(`.github/workflows/kl-night-owl.yml`). The workflow runs the unit tests and builds a signed
+release APK. It then installs the app on Android 8 and Android 15 emulators and drives every
+feature (`app/src/androidTest`, `scripts/emulator_tests.sh`, `scripts/release_smoke.py`). The APK
+is published as a GitHub Release only when all of that passes. Screenshots from each run are
+attached to the "automated test results" pre-release. To build it yourself, open `kl-night-owl/` in Android
 Studio, or run `./gradlew :app:assembleRelease` with the Android SDK installed.
 
 The signing key (`app/nightowl-release.p12`) is in the repository on purpose. Every build is

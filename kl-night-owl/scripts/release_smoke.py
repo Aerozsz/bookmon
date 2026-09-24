@@ -121,6 +121,21 @@ if root is not None:
         activity = resumed_activity()
         print("After Go, foreground: " + activity, flush=True)
         shot("02_after_go")
+        if "com.google.android.apps.maps" in activity:
+            # A fresh emulator shows Google Maps' first-run screens; step past them to the route.
+            for _ in range(5):
+                screen = dump()
+                buttons = [n for n in nodes(screen) if (n.get("text") or "").strip().lower()
+                           in ("skip", "no thanks", "not now", "while using the app", "allow", "only this time", "got it")]
+                if not buttons:
+                    break
+                tap(buttons[0])
+                time.sleep(5)
+            time.sleep(4)
+            shot("02b_google_maps_route")
+            screen = dump()
+            seen = sorted({(n.get("text") or "").strip() for n in nodes(screen) if (n.get("text") or "").strip()})
+            print("Google Maps shows: " + " | ".join(seen[:40]), flush=True)
         left_app = PKG + "/" not in activity
         check(left_app or alive(), "Go opens a map/browser app without crashing ours")
         if left_app:

@@ -6,11 +6,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -88,7 +91,7 @@ private val LOCATION_PERMISSIONS = arrayOf(
     Manifest.permission.ACCESS_COARSE_LOCATION,
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun NightOwlScreen(vm: NightOwlViewModel) {
     val data by vm.data.collectAsStateWithLifecycle()
@@ -150,7 +153,7 @@ fun NightOwlScreen(vm: NightOwlViewModel) {
                     Column {
                         Text("KL Night Owl", fontWeight = FontWeight.Bold)
                         Text(
-                            "${counts[null] ?: 0} spots open between midnight & 6 AM",
+                            "${data.places.size} spots open between midnight & 6 AM",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -189,7 +192,9 @@ fun NightOwlScreen(vm: NightOwlViewModel) {
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                .consumeWindowInsets(padding)
+                .imePadding(),
         ) {
             FilterBar(
                 filters = filters,
@@ -424,7 +429,7 @@ private fun AboutDialog(data: DataState, onDismiss: () -> Unit) {
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    if (USES_GOOGLE_MAP_TILES) "Map: Google Maps." else "Map tiles: © OpenStreetMap contributors © CARTO.",
+                    if (USES_GOOGLE_MAP_TILES) "Map: Google Maps." else "Map: © OpenStreetMap contributors.",
                 )
                 Spacer(Modifier.height(6.dp))
                 Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall)

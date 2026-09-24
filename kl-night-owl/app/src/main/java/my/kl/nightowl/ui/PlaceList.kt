@@ -74,9 +74,8 @@ fun PlaceList(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(32.dp),
+                    .padding(horizontal = 32.dp, vertical = 40.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
             ) {
                 Text("🦉", style = MaterialTheme.typography.displayMedium)
                 Spacer(Modifier.height(12.dp))
@@ -193,7 +192,7 @@ fun PlaceCard(
                     Text(it, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.secondary)
                 }
             }
-            if (!place.schedule.isAlwaysOpen) {
+            if (!place.schedule.isAlwaysOpen && ui.statusText != ui.tonightText) {
                 Text(
                     ui.statusText,
                     style = MaterialTheme.typography.bodySmall,
