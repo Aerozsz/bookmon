@@ -39,8 +39,6 @@ adb logcat -d > "$OUT/logcat-tests.txt"
 {
   echo "== Test log lines"
   grep -E "NightOwlTest|NightOwlRepo" "$OUT/logcat-tests.txt" | sed -E 's/^.*(NightOwlTest|NightOwlRepo): //'
-  echo "== Who focused the search box (latest stacks; the search test focuses it on purpose)"
-  grep -A45 "NightOwlFocus" "$OUT/logcat-tests.txt" | grep -E "NightOwlFocus|at |TestRunner: started" | tail -140
   echo "== Crashes during tests"
   grep -A25 "FATAL EXCEPTION" "$OUT/logcat-tests.txt" | head -120
 } >> "$SUMMARY"
